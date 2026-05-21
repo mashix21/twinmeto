@@ -1,4 +1,4 @@
-const CACHE = 'rhythm-app-v6';
+const CACHE = 'rhythm-app-v7';
 const ASSETS = [
   './index.html',
   './manifest.json',

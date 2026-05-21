@@ -1109,7 +1109,22 @@ function onRandomChange() {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(r  => console.log('SW registered:', r.scope))
+      .then(reg => {
+        console.log('SW registered:', reg.scope);
+        // iOS Safari: 起動のたびに更新チェックを強制する
+        reg.update();
+        // 新しいSWが待機中なら即座に有効化してリロード
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          if (!newWorker) return;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              // 新バージョンが使用可能になったらリロード
+              window.location.reload();
+            }
+          });
+        });
+      })
       .catch(e => console.warn('SW failed:', e));
   });
 }
