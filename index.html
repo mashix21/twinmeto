@@ -349,19 +349,29 @@ function getPoolEntry() {
 // ============================================================
 // Constants & data model
 // ============================================================
-const STEPS = 16;
-const TS_OPTIONS = [2,3,4,5,6,7];
+// SUB = 1拍あたりのステップ数（16分音符単位 = 4）
+// 1小節のステップ数 = timeSig × SUB
+// secPerStep = (60 / bpm) / SUB  ← 拍子に依存しない均一な16分音符間隔
+const SUB         = 4;
+const TS_OPTIONS  = [2,3,4,5,6,7];
 const BAR_OPTIONS = [1,2,3,4,6,8];
 
+function stepsForTs(ts) { return ts * SUB; }
+
+function makeDefaultSteps(ts) {
+  const n = stepsForTs(ts);
+  return Array.from({length: n}, (_, j) => ({
+    on:     j % SUB === 0,   // 各拍の頭だけON
+    accent: j === 0          // 第1拍だけアクセント
+  }));
+}
+
 function makeTempoData(bpm, bars, ts) {
-  const spb = Math.max(1, STEPS / ts);
+  const n = stepsForTs(ts);
   return {
     bpm, bars, timeSig: ts,
-    steps: Array.from({length: STEPS}, (_, j) => ({
-      on:     j % spb === 0,
-      accent: j === 0
-    })),
-    offsets: new Array(STEPS).fill(0)
+    steps:   makeDefaultSteps(ts),
+    offsets: new Array(n).fill(0)
   };
 }
 
@@ -398,7 +408,7 @@ let rafHandle        = null;
 let lastHlStep = -1, lastHlSlot = -1;
 
 // ---- DOM cache for step buttons (populated in buildPatternPanels) ----
-// stepBtnCache[slotIdx][stepIdx] = HTMLElement
+// stepBtnCache[slotIdx][stepIdx] = HTMLElement  (length varies by timeSig)
 const stepBtnCache = [[], [], []];
 
 // ---- Cached stat elements (looked up once at boot) ----
@@ -455,9 +465,9 @@ function scheduler() {
     const d = tempoData[slotIdx];
 
     // ---- seconds per step for THIS slot ----
-    // 1 bar = timeSig beats = timeSig * (STEPS/timeSig) steps = STEPS steps
-    // 1 step = (60/bpm) * timeSig / STEPS  seconds
-    const secPerStep = (60.0 / d.bpm) * d.timeSig / STEPS;
+    // secPerStep = 1拍 / SUB = (60/bpm) / SUB  ← 16分音符1個分（拍子不問）
+    const secPerStep = (60.0 / d.bpm) / SUB;
+    const totalSteps = stepsForTs(d.timeSig);
 
     // ---- fire sound ----
     const s = d.steps[stepIdx];
@@ -477,7 +487,7 @@ function scheduler() {
 
     // ---- advance position ----
     const nextStep = stepIdx + 1;
-    if (nextStep < STEPS) {
+    if (nextStep < totalSteps) {
       schedState.stepIdx = nextStep;
     } else {
       // End of bar
@@ -560,7 +570,8 @@ function applyHighlight(slotIdx, stepIdx, barIdx) {
   if (elTs && elTs.textContent !== tsStr) elTs.textContent = tsStr;
   const barStr = String(barIdx + 1);
   if (elBar && elBar.textContent !== barStr) elBar.textContent = barStr;
-  const stepStr = (stepIdx + 1) + '/' + STEPS;
+  const totalSteps = stepsForTs(tempoData[slotIdx].timeSig);
+  const stepStr = (stepIdx + 1) + '/' + totalSteps;
   if (elStep && elStep.textContent !== stepStr) elStep.textContent = stepStr;
 }
 
@@ -770,14 +781,27 @@ function setBar(i, n) {
 }
 
 function setTimeSig(i, n) {
-  tempoData[i].timeSig = n;
-  // Preserve existing on/accent pattern, only reset spacing guide
-  // (do NOT wipe user-edited steps — just rebuild the beat-label display)
+  const d       = tempoData[i];
+  const newLen  = stepsForTs(n);
+  const oldLen  = d.steps.length;
+
+  if (newLen !== oldLen) {
+    // Resize steps: keep existing, extend with off, or truncate
+    if (newLen > oldLen) {
+      for (let k = oldLen; k < newLen; k++) d.steps.push({on:false, accent:false});
+      for (let k = oldLen; k < newLen; k++) d.offsets.push(0);
+    } else {
+      d.steps   = d.steps.slice(0, newLen);
+      d.offsets = d.offsets.slice(0, newLen);
+    }
+  }
+  d.timeSig = n;
+
   document.querySelectorAll(`#tspills-${i} .pill`).forEach(p => {
     p.classList.remove('sel-ts');
     if (+p.textContent.replace('/4', '') === n) p.classList.add('sel-ts');
   });
-  buildPatternPanels(); // re-render labels only
+  buildPatternPanels();
 }
 
 function buildPatternPanels() {
@@ -800,19 +824,22 @@ function buildPatternPanels() {
     const panel = document.createElement('div');
     panel.style.display = i === activePatternTab ? 'block' : 'none';
     panel.id = 'panel-' + i;
-    const spb = Math.max(1, STEPS / d.timeSig);
+    const totalSteps = stepsForTs(d.timeSig);
+    // グリッドの列数: 最大16列、それ以上は8列ずつ折り返す
+    const gridCols = totalSteps <= 16 ? totalSteps : (totalSteps <= 24 ? 12 : totalSteps / 2);
 
     let stepBtns = '';
-    for (let j = 0; j < STEPS; j++) {
+    for (let j = 0; j < totalSteps; j++) {
       const s   = d.steps[j];
-      const bl  = j % spb === 0 ? String(Math.floor(j / spb) + 1) : '·';
+      // 各拍の頭 (j % SUB === 0) に拍番号、それ以外は ·
+      const bl  = j % SUB === 0 ? String(Math.floor(j / SUB) + 1) : '·';
       const cls = s.accent ? 'accent' : s.on ? 'on' : '';
       stepBtns += `<button class="step-btn${cls ? ' ' + cls : ''}" id="sb-${i}-${j}" onclick="cycleStep(${i},${j})">
         <span class="step-num">${j + 1}</span><span>${bl}</span></button>`;
     }
 
     let msCells = '';
-    for (let j = 0; j < STEPS; j++) {
+    for (let j = 0; j < totalSteps; j++) {
       const v = d.offsets[j];
       msCells += `<div class="ms-cell" onclick="openNumpad('ms',${i},${j})">
         <span class="ms-num">${j + 1}</span>
@@ -821,20 +848,21 @@ function buildPatternPanels() {
 
     panel.innerHTML = `
       <div class="step-wrap">
-        <span class="step-sub">鳴らす位置 — TEMPO ${i + 1} / ${d.timeSig}/4拍子 — クリック: OFF→ON→アクセント</span>
-        <div class="step-grid" style="grid-template-columns:repeat(16,1fr)">${stepBtns}</div>
+        <span class="step-sub">鳴らす位置 — TEMPO ${i + 1} / ${d.timeSig}/4拍子 (${totalSteps}ステップ) — クリック: OFF→ON→アクセント</span>
+        <div class="step-grid" style="grid-template-columns:repeat(${gridCols},1fr)">${stepBtns}</div>
       </div>
       <div class="ms-section">
         <span class="step-sub">タイミングオフセット（ms）</span>
-        <div class="ms-grid" style="grid-template-columns:repeat(16,1fr)">${msCells}</div>
+        <div class="ms-grid" style="grid-template-columns:repeat(${gridCols},1fr)">${msCells}</div>
       </div>`;
     panels.appendChild(panel);
   }
 
-  // Rebuild step button DOM cache for all slots
+  // Rebuild step button DOM cache for all slots (dynamic length)
   for (let i = 0; i < 3; i++) {
+    const n = stepsForTs(tempoData[i].timeSig);
     stepBtnCache[i] = [];
-    for (let j = 0; j < STEPS; j++) {
+    for (let j = 0; j < n; j++) {
       stepBtnCache[i][j] = document.getElementById(`sb-${i}-${j}`) || null;
     }
   }
