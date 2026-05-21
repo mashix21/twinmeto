@@ -2,229 +2,988 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Rhythm App Ultimate PWA</title>
-
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rhythm App</title>
 <link rel="manifest" href="manifest.json">
-
-<meta name="theme-color" content="#0d0d0f">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="Rhythm">
-
 <link rel="apple-touch-icon" href="icon-192.png">
-
+<meta name="theme-color" content="#0d0d0f">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
 <style>
+:root{
+  --bg:#0d0d0f;--surface:#161618;--s2:#1e1e22;--s3:#26262c;
+  --bd:rgba(255,255,255,0.08);--bd2:rgba(255,255,255,0.15);
+  --text:#f0eeeb;--muted:#6e6c6a;
+  --acc:#c8ff5f;--acc2:#5fc8ff;--acc3:#ff5fc8;--acc4:#ffb85f;
+  --on:rgba(200,255,95,0.18);--ac:rgba(95,200,255,0.22);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif}
 body{
-  margin:0;
-  background:#0d0d0f;
-  color:white;
-  font-family:sans-serif;
-  padding:20px;
+  display:flex;flex-direction:column;align-items:center;
+  min-height:100vh;min-height:100dvh;padding:2rem 1rem;padding-top:max(2rem,env(safe-area-inset-top));padding-bottom:max(2rem,env(safe-area-inset-bottom));padding-left:max(1rem,env(safe-area-inset-left));padding-right:max(1rem,env(safe-area-inset-right));
+  background:
+    radial-gradient(ellipse 60% 40% at 20% 10%,rgba(200,255,95,.04) 0%,transparent 70%),
+    radial-gradient(ellipse 50% 60% at 80% 80%,rgba(95,200,255,.04) 0%,transparent 70%),
+    var(--bg);
 }
-.card{
-  background:#1a1a1f;
-  border-radius:16px;
-  padding:16px;
-  margin-bottom:16px;
+header{width:100%;max-width:780px;display:flex;align-items:baseline;gap:12px;margin-bottom:1.5rem}
+header h1{font-size:26px;font-weight:800;letter-spacing:-.03em}
+header .sub{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:.1em}
+.card{width:100%;max-width:780px;background:var(--surface);border:1px solid var(--bd);border-radius:16px;padding:1.25rem 1.5rem;margin-bottom:10px}
+.ct{font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin-bottom:.9rem;font-family:'DM Mono',monospace}
+
+/* Transport */
+.transport{display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+#play-btn{width:54px;height:54px;border-radius:50%;border:none;background:var(--acc);color:#0d0d0f;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .1s,background .2s;flex-shrink:0}
+#play-btn:hover{transform:scale(1.06)}
+#play-btn.playing{background:var(--acc3)}
+#play-btn svg{width:20px;height:20px}
+.stats{display:flex;gap:16px;flex:1;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;gap:1px}
+.sl{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.07em}
+.sv{font-family:'DM Mono',monospace;font-size:20px;font-weight:500;color:var(--text);transition:color .1s}
+.sv.flash{color:var(--acc)}
+/* BPM flash: CSS animation instead of JS setTimeout */
+@keyframes bpm-flash{0%{color:var(--acc)}100%{color:var(--text)}}
+.sv.flash-anim{animation:bpm-flash .25s ease-out forwards}
+
+/* Controls row */
+.ctrl-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:.9rem}
+select{background:var(--s2);border:1px solid var(--bd2);color:var(--text);font-family:'Syne',sans-serif;font-size:13px;padding:5px 10px;border-radius:8px;cursor:pointer}
+select:disabled{opacity:.35;cursor:not-allowed}
+label.toggle{display:flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--bd2);padding:5px 12px;border-radius:8px;cursor:pointer;font-size:13px;user-select:none;transition:border-color .15s,color .15s}
+label.toggle input{accent-color:var(--acc3);width:13px;height:13px;cursor:pointer}
+label.toggle.on{border-color:var(--acc3);color:var(--acc3)}
+label.toggle.disabled{opacity:.35;pointer-events:none}
+
+/* Volume section */
+.vol-section{display:flex;flex-direction:column;gap:8px}
+.vol-row{display:flex;align-items:center;gap:10px}
+.vol-lbl{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);min-width:90px}
+.vol-slider{flex:1;accent-color:var(--acc)}
+.vol-val{font-family:'DM Mono',monospace;font-size:11px;color:var(--acc);min-width:36px;text-align:right}
+
+/* Sound panel */
+.sound-panel{display:flex;flex-direction:column;gap:10px}
+.sound-type-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.sound-type-lbl{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);min-width:60px}
+
+/* Import zone */
+.import-zone{
+  border:1px dashed var(--bd2);border-radius:10px;padding:10px 14px;
+  display:flex;flex-direction:column;gap:8px;background:rgba(255,255,255,.02)
 }
-button{
-  border:none;
-  border-radius:12px;
-  padding:12px 18px;
-  background:#c8ff5f;
-  color:black;
-  font-weight:bold;
-  cursor:pointer;
+.import-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.import-lbl{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);min-width:70px}
+.import-btn{
+  font-family:'DM Mono',monospace;font-size:11px;padding:4px 12px;border-radius:7px;
+  border:1px solid var(--bd2);background:var(--s2);color:var(--text);cursor:pointer;
+  transition:background .1s
 }
-.step-grid{
-  display:grid;
-  grid-template-columns:repeat(8,1fr);
-  gap:6px;
+.import-btn:hover{background:var(--s3)}
+.import-file{font-family:'DM Mono',monospace;font-size:10px;color:var(--acc2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.import-clear{font-family:'DM Mono',monospace;font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid rgba(255,95,200,.3);background:rgba(255,95,200,.1);color:var(--acc3);cursor:pointer}
+input[type=file]{display:none}
+
+/* Tempo blocks */
+.tblocks{display:flex;gap:10px;flex-wrap:wrap}
+.tblock{
+  flex:1;min-width:210px;background:var(--s2);border:1px solid var(--bd);
+  border-radius:12px;padding:12px 14px;position:relative;overflow:hidden;transition:border-color .15s
 }
-@media(min-width:700px){
-  .step-grid{
-    grid-template-columns:repeat(16,1fr);
-  }
+.tblock::before{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(135deg,rgba(200,255,95,.07) 0%,transparent 60%);opacity:0;transition:opacity .2s}
+.tblock.active{border-color:var(--acc)}
+.tblock.active::before{opacity:1}
+.tblock.active-rand{border-color:var(--acc3)}
+.tblock.active-rand::before{background:linear-gradient(135deg,rgba(255,95,200,.08) 0%,transparent 60%);opacity:1}
+.th{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.tname{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);letter-spacing:.1em}
+.badge{font-family:'DM Mono',monospace;font-size:9px;border-radius:4px;padding:1px 6px;border:1px solid}
+.badge-next{background:rgba(95,200,255,.12);color:var(--acc2);border-color:rgba(95,200,255,.3)}
+.bpm-row{display:flex;align-items:baseline;gap:4px;margin-bottom:6px}
+.bpm-disp{font-family:'DM Mono',monospace;font-size:30px;font-weight:500;color:var(--text);min-width:58px;cursor:pointer;border-radius:6px;padding:0 4px;transition:background .15s;user-select:none}
+.bpm-disp:hover{background:rgba(200,255,95,.1)}
+.bpm-unit{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
+.tblock input[type=range]{width:100%;accent-color:var(--acc);margin-bottom:8px}
+.tempo-settings-row{display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.setting-row{display:flex;align-items:center;gap:5px}
+.setting-lbl{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);white-space:nowrap;min-width:46px}
+.pills{display:flex;gap:3px;flex-wrap:wrap}
+.pill{font-family:'DM Mono',monospace;font-size:11px;font-weight:500;padding:2px 7px;border-radius:6px;border:1px solid var(--bd2);background:var(--surface);color:var(--muted);cursor:pointer;transition:background .1s,color .1s,border-color .1s}
+.pill.sel{background:rgba(200,255,95,.15);color:var(--acc);border-color:rgba(200,255,95,.4)}
+.pill.sel-ts{background:rgba(95,200,255,.15);color:var(--acc2);border-color:rgba(95,200,255,.4)}
+
+/* Pattern tabs */
+.sound-row{display:flex;align-items:center;gap:8px;margin-bottom:.9rem;flex-wrap:wrap}
+.step-wrap{margin-bottom:.75rem}
+.step-sub{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-bottom:6px;display:block}
+.step-grid{display:grid;gap:4px}
+.step-btn{height:40px;border-radius:7px;border:1px solid var(--bd);background:var(--s2);color:var(--muted);font-family:'DM Mono',monospace;font-size:9px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;transition:background .1s,border-color .1s,color .1s,transform .07s;padding:0}
+.step-btn:hover{border-color:var(--bd2)}
+.step-btn.on{background:var(--on);border-color:rgba(200,255,95,.3);color:var(--acc)}
+.step-btn.accent{background:var(--ac);border-color:rgba(95,200,255,.4);color:var(--acc2)}
+.step-btn.active-beat{transform:scale(.88);border-color:#fff !important}
+.step-num{font-size:7px;opacity:.5}
+.ms-section{margin-top:.5rem}
+.ms-grid{display:grid;gap:4px;margin-top:6px}
+.ms-cell{background:var(--s2);border:1px solid var(--bd);border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3px 2px;gap:1px;cursor:pointer}
+.ms-cell:hover .ms-val{background:rgba(255,184,95,.12)}
+.ms-num{font-family:'DM Mono',monospace;font-size:7px;color:var(--muted)}
+.ms-val{font-family:'DM Mono',monospace;font-size:9px;color:var(--acc4);border-radius:3px;padding:0 2px}
+
+/* Numpad */
+.numpad-wrap{display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);align-items:center;justify-content:center}
+.numpad-wrap.open{display:flex}
+.numpad{background:var(--surface);border:1px solid var(--bd2);border-radius:16px;padding:1.25rem;width:240px}
+.numpad-title{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);letter-spacing:.1em;margin-bottom:.75rem}
+.numpad-display{font-family:'DM Mono',monospace;font-size:28px;font-weight:500;color:var(--acc);background:var(--s2);border:1px solid var(--bd2);border-radius:8px;padding:6px 12px;margin-bottom:.75rem;min-height:46px;display:flex;align-items:center;justify-content:flex-end}
+.numpad-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px}
+.nk{height:44px;border-radius:8px;border:1px solid var(--bd2);background:var(--s2);color:var(--text);font-family:'DM Mono',monospace;font-size:16px;font-weight:500;cursor:pointer;transition:background .1s,transform .07s}
+.nk:hover{background:var(--s3)}
+.nk:active{transform:scale(.94)}
+.nk.ok{background:rgba(200,255,95,.18);color:var(--acc);border-color:rgba(200,255,95,.4)}
+.nk.neg{background:rgba(255,184,95,.1);color:var(--acc4);border-color:rgba(255,184,95,.3)}
+.nk.cancel{background:rgba(255,95,200,.1);color:var(--acc3);border-color:rgba(255,95,200,.3)}
+.nk-row{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.legend{display:flex;gap:14px;margin-top:10px;flex-wrap:wrap}
+.li{display:flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)}
+.ld{width:10px;height:10px;border-radius:3px}
+
+/* PWA install bar */
+#install-bar{
+  display:none;position:fixed;bottom:0;left:0;right:0;z-index:200;
+  background:#161618;border-top:1px solid rgba(200,255,95,.25);
+  padding:12px 20px;padding-bottom:max(12px,env(safe-area-inset-bottom));
+  align-items:center;justify-content:space-between;gap:12px;
+  box-shadow:0 -8px 32px rgba(0,0,0,.5)
 }
-.step{
-  min-height:52px;
-  background:#222;
-  border-radius:8px;
-  border:1px solid #333;
-}
-.step.on{
-  background:#c8ff5f55;
-}
-.step.accent{
-  background:#5fc8ff66;
-}
-.step.active{
-  outline:2px solid white;
-}
+#install-bar .ib-text{font-family:'DM Mono',monospace;font-size:12px;color:#f0eeeb}
+#install-bar .ib-text span{color:#c8ff5f;font-weight:500}
+#install-bar .ib-btns{display:flex;gap:8px;flex-shrink:0}
+.ib-btn{font-family:'DM Mono',monospace;font-size:12px;padding:6px 16px;border-radius:8px;cursor:pointer;border:none}
+.ib-install{background:#c8ff5f;color:#0d0d0f;font-weight:500}
+.ib-dismiss{background:transparent;border:1px solid rgba(255,255,255,.15)!important;color:#6e6c6a}
 </style>
 </head>
 <body>
 
+<header>
+  <h1>Rhythm App</h1>
+  <span class="sub">/ METRONOME v6</span>
+</header>
+
+<!-- Transport -->
 <div class="card">
-<h1>Rhythm App Ultimate PWA</h1>
-
-<button id="playBtn">PLAY</button>
-
-<p id="status">STOPPED</p>
+  <div class="transport">
+    <button id="play-btn" onclick="togglePlay()">
+      <svg id="play-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
+    </button>
+    <div class="stats">
+      <div class="stat"><span class="sl">TEMPO</span><span class="sv" id="s-bpm">—</span></div>
+      <div class="stat"><span class="sl">SLOT</span><span class="sv" id="s-slot">—</span></div>
+      <div class="stat"><span class="sl">拍子</span><span class="sv" id="s-ts">—</span></div>
+      <div class="stat"><span class="sl">BAR</span><span class="sv" id="s-bar">—</span></div>
+      <div class="stat"><span class="sl">STEP</span><span class="sv" id="s-step">—</span></div>
+    </div>
+  </div>
 </div>
 
+<!-- Sound & Volume -->
 <div class="card">
-<div class="step-grid" id="grid"></div>
+  <div class="ct">サウンド設定</div>
+  <div class="sound-panel">
+
+    <!-- Sound type + import -->
+    <div class="sound-type-row">
+      <span class="sound-type-lbl">音色ベース：</span>
+      <select id="sound-type" onchange="soundType=this.value">
+        <option value="click">通常クリック</option>
+        <option value="hihat">ハイハット</option>
+        <option value="beep">電子ビープ</option>
+        <option value="wood">木魚・コンガ</option>
+        <option value="custom">カスタム音源</option>
+      </select>
+    </div>
+
+    <!-- Import zone -->
+    <div class="import-zone">
+      <div class="import-row">
+        <span class="import-lbl">通常音（ON）：</span>
+        <button class="import-btn" onclick="document.getElementById('imp-normal').click()">ファイル選択</button>
+        <input type="file" id="imp-normal" accept="audio/*" onchange="loadCustomSound('normal',this)">
+        <span class="import-file" id="imp-normal-name">未選択</span>
+        <button class="import-clear" onclick="clearSound('normal')" id="imp-normal-clear" style="display:none">✕</button>
+      </div>
+      <div class="import-row">
+        <span class="import-lbl">アクセント音：</span>
+        <button class="import-btn" onclick="document.getElementById('imp-accent').click()">ファイル選択</button>
+        <input type="file" id="imp-accent" accept="audio/*" onchange="loadCustomSound('accent',this)">
+        <span class="import-file" id="imp-accent-name">未選択（通常音を流用）</span>
+        <button class="import-clear" onclick="clearSound('accent')" id="imp-accent-clear" style="display:none">✕</button>
+      </div>
+    </div>
+
+    <!-- Volume controls -->
+    <div class="vol-section">
+      <div class="vol-row">
+        <span class="vol-lbl">マスター音量：</span>
+        <input type="range" class="vol-slider" id="vol-master" min="0" max="1" step="0.01" value="0.8"
+          oninput="masterGain.gain.value=+this.value;document.getElementById('vol-master-val').textContent=Math.round(this.value*100)+'%'">
+        <span class="vol-val" id="vol-master-val">80%</span>
+      </div>
+      <div class="vol-row">
+        <span class="vol-lbl">通常ビート：</span>
+        <input type="range" class="vol-slider" id="vol-normal" min="0" max="2" step="0.01" value="1"
+          oninput="normalVol=+this.value;document.getElementById('vol-normal-val').textContent=Math.round(this.value*100)+'%'">
+        <span class="vol-val" id="vol-normal-val">100%</span>
+      </div>
+      <div class="vol-row">
+        <span class="vol-lbl">アクセント：</span>
+        <input type="range" class="vol-slider" id="vol-accent" min="0" max="2" step="0.01" value="1.4"
+          oninput="accentVol=+this.value;document.getElementById('vol-accent-val').textContent=Math.round(this.value*100)+'%'">
+        <span class="vol-val" id="vol-accent-val">140%</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Tempo -->
+<div class="card">
+  <div class="ct">テンポ設定</div>
+  <div class="ctrl-row">
+    <select id="tempo-count" onchange="onTempoCountChange()">
+      <option value="1">1テンポ</option>
+      <option value="2" selected>2テンポ</option>
+      <option value="3">3テンポ</option>
+    </select>
+    <label class="toggle" id="rand-label">
+      <input type="checkbox" id="random-mode" onchange="onRandomChange()">
+      ランダム切り替え
+    </label>
+  </div>
+  <div class="tblocks" id="tempo-blocks"></div>
+</div>
+
+<!-- Pattern -->
+<div class="card">
+  <div class="ct">ビートパターン（各テンポ独立）</div>
+  <div class="sound-row">
+    <span style="font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)">表示：</span>
+    <div class="pills" id="pattern-tabs"></div>
+  </div>
+  <div id="pattern-panels"></div>
+  <div class="legend">
+    <div class="li"><div class="ld" style="background:rgba(200,255,95,.3)"></div>オン</div>
+    <div class="li"><div class="ld" style="background:rgba(95,200,255,.4)"></div>アクセント</div>
+    <div class="li"><div class="ld" style="background:#1e1e22;border:1px solid rgba(255,255,255,.08)"></div>オフ</div>
+    <div class="li"><div class="ld" style="background:rgba(255,184,95,.3)"></div>msオフセット</div>
+  </div>
+</div>
+
+<!-- Numpad -->
+<div class="numpad-wrap" id="numpad-wrap" onclick="numpadOutside(event)">
+  <div class="numpad">
+    <div class="numpad-title" id="np-title">BPM 入力</div>
+    <div class="numpad-display" id="np-disp">0</div>
+    <div class="numpad-grid">
+      <button class="nk" onclick="nk('7')">7</button><button class="nk" onclick="nk('8')">8</button><button class="nk" onclick="nk('9')">9</button>
+      <button class="nk" onclick="nk('4')">4</button><button class="nk" onclick="nk('5')">5</button><button class="nk" onclick="nk('6')">6</button>
+      <button class="nk" onclick="nk('1')">1</button><button class="nk" onclick="nk('2')">2</button><button class="nk" onclick="nk('3')">3</button>
+      <button class="nk" onclick="nk('del')">⌫</button><button class="nk" onclick="nk('0')">0</button><button class="nk ok" onclick="nk('ok')">OK</button>
+    </div>
+    <div class="nk-row">
+      <button class="nk neg" id="np-neg-btn" onclick="nk('neg')" style="display:none">±</button>
+      <button class="nk cancel" id="np-cancel-btn" onclick="nk('cancel')" style="grid-column:span 2">キャンセル</button>
+    </div>
+  </div>
 </div>
 
 <script>
-
+// ============================================================
+// Audio context + master gain
+// ============================================================
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+const masterGain = audioCtx.createGain();
+masterGain.gain.value = 0.8;
+masterGain.connect(audioCtx.destination);
 
-const master = audioCtx.createGain();
-master.connect(audioCtx.destination);
+let normalVol = 1.0;
+let accentVol = 1.4;
 
-const BPM = 120;
-const STEPS = 16;
+// Custom sounds
+let customBuffers = { normal: null, accent: null };
 
-let currentStep = 0;
-let nextTime = 0;
-let playing = false;
-let timer = null;
-
-const pattern = Array.from({length:STEPS}, (_,i)=>({
-  on:i % 4 === 0,
-  accent:i === 0
-}));
-
-function buildGrid(){
-
-  const grid = document.getElementById("grid");
-
-  for(let i=0;i<STEPS;i++){
-
-    const btn = document.createElement("div");
-
-    btn.className = "step";
-
-    if(pattern[i].accent){
-      btn.classList.add("accent");
-    }else if(pattern[i].on){
-      btn.classList.add("on");
-    }
-
-    grid.appendChild(btn);
+// ---- Custom buffer pool ----
+// AudioBufferSourceNode は使い捨てだが GainNode は再利用できる。
+// pool: 固定サイズのオブジェクト配列で new GainNode の回数を最小化する。
+const CUSTOM_POOL_SIZE = 8;
+const customPool = [];
+function initCustomPool() {
+  for (let i = 0; i < CUSTOM_POOL_SIZE; i++) {
+    const g = audioCtx.createGain();
+    g.connect(masterGain);
+    customPool.push({ gain: g, busy: false });
   }
 }
-
-function playSound(time, accent){
-
-  const osc = audioCtx.createOscillator();
-  const gain = audioCtx.createGain();
-
-  osc.connect(gain);
-  gain.connect(master);
-
-  osc.frequency.value = accent ? 1200 : 700;
-
-  gain.gain.setValueAtTime(
-    accent ? 0.3 : 0.15,
-    time
-  );
-
-  gain.gain.exponentialRampToValueAtTime(
-    0.0001,
-    time + 0.05
-  );
-
-  osc.start(time);
-  osc.stop(time + 0.06);
+initCustomPool();
+let poolCursor = 0;
+function getPoolEntry() {
+  // round-robin: find the next non-busy slot (oldest completed ones are fine)
+  for (let k = 0; k < CUSTOM_POOL_SIZE; k++) {
+    const idx = (poolCursor + k) % CUSTOM_POOL_SIZE;
+    if (!customPool[idx].busy) {
+      poolCursor = (idx + 1) % CUSTOM_POOL_SIZE;
+      return customPool[idx];
+    }
+  }
+  // All busy (very high BPM edge case): reuse oldest
+  const entry = customPool[poolCursor];
+  poolCursor = (poolCursor + 1) % CUSTOM_POOL_SIZE;
+  return entry;
 }
 
-function scheduler(){
+// ============================================================
+// Constants & data model
+// ============================================================
+const STEPS = 16;
+const TS_OPTIONS = [2,3,4,5,6,7];
+const BAR_OPTIONS = [1,2,3,4,6,8];
 
-  while(nextTime < audioCtx.currentTime + 0.1){
+function makeTempoData(bpm, bars, ts) {
+  const spb = Math.max(1, STEPS / ts);
+  return {
+    bpm, bars, timeSig: ts,
+    steps: Array.from({length: STEPS}, (_, j) => ({
+      on:     j % spb === 0,
+      accent: j === 0
+    })),
+    offsets: new Array(STEPS).fill(0)
+  };
+}
 
-    const step = pattern[currentStep];
+const tempoData = [
+  makeTempoData(120, 2, 4),
+  makeTempoData(100, 2, 3),
+  makeTempoData(80,  2, 4)
+];
 
-    if(step.on){
-      playSound(nextTime, step.accent);
+let tempoCount       = 2;
+let randomMode       = false;
+let soundType        = 'click';
+let activePatternTab = 0;
+
+// ============================================================
+// Playback state
+// ============================================================
+let sequence         = [];
+let seqPos           = 0;
+let isPlaying        = false;
+let schedulerTimer   = null;
+
+// Each scheduled event is fully self-contained:
+//   { audioTime, slotIdx, stepIdx, barIdx }
+// nextAudioTime tracks where the *next* step will fire.
+let nextAudioTime    = 0;
+let schedState       = null; // { slotIdx, stepIdx, barIdx, barInSlot }
+
+// UI highlight queue: { audioTime, slotIdx, stepIdx, barIdx }
+let highlightQueue   = [];
+let rafHandle        = null;
+
+// Last highlighted position for cleanup
+let lastHlStep = -1, lastHlSlot = -1;
+
+// ---- DOM cache for step buttons (populated in buildPatternPanels) ----
+// stepBtnCache[slotIdx][stepIdx] = HTMLElement
+const stepBtnCache = [[], [], []];
+
+// ---- Cached stat elements (looked up once at boot) ----
+let elBpm, elSlot, elTs, elBar, elStep, elBpmFlash;
+
+// ---- Previous slot index for tempo-block class changes ----
+let lastHlSlotForBlock = -1;
+
+// Numpad
+let npTarget = null, npBuf = '', npAllowNeg = false;
+
+// ============================================================
+// Sequence helpers
+// ============================================================
+function shuffle(a) {
+  const b = [...a];
+  for (let i = b.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [b[i], b[j]] = [b[j], b[i]];
+  }
+  return b;
+}
+
+function buildSequence() {
+  const idx = Array.from({length: tempoCount}, (_, i) => i);
+  sequence = randomMode ? shuffle(idx) : idx;
+  seqPos   = 0;
+}
+
+// ============================================================
+// Scheduler — look-ahead audio scheduling
+// Called by setInterval every 20 ms.
+// Fills the next LOOKAHEAD seconds with pre-scheduled notes.
+// ============================================================
+const LOOKAHEAD    = 0.15; // seconds to schedule ahead
+const SCHEDULE_INT = 20;   // ms interval
+
+function initSchedState() {
+  return {
+    slotIdx:   sequence[0],
+    stepIdx:   0,
+    barIdx:    0,
+    barInSlot: 0
+  };
+}
+
+function scheduler() {
+  if (!isPlaying) return;
+
+  const horizon = audioCtx.currentTime + LOOKAHEAD;
+
+  while (nextAudioTime < horizon) {
+    const { slotIdx, stepIdx, barIdx, barInSlot } = schedState;
+    const d = tempoData[slotIdx];
+
+    // ---- seconds per step for THIS slot ----
+    // 1 bar = timeSig beats = timeSig * (STEPS/timeSig) steps = STEPS steps
+    // 1 step = (60/bpm) * timeSig / STEPS  seconds
+    const secPerStep = (60.0 / d.bpm) * d.timeSig / STEPS;
+
+    // ---- fire sound ----
+    const s = d.steps[stepIdx];
+    if (s && s.on) {
+      const offsetSec = (d.offsets[stepIdx] || 0) / 1000;
+      playSound(nextAudioTime + offsetSec, s.accent);
     }
 
-    const snapshot = currentStep;
-
-    requestAnimationFrame(()=>{
-      updateUI(snapshot);
+    // ---- queue UI highlight ----
+    highlightQueue.push({
+      audioTime: nextAudioTime,
+      slotIdx, stepIdx, barIdx
     });
 
-    currentStep++;
+    // ---- advance time ----
+    nextAudioTime += secPerStep;
 
-    if(currentStep >= STEPS){
-      currentStep = 0;
+    // ---- advance position ----
+    const nextStep = stepIdx + 1;
+    if (nextStep < STEPS) {
+      schedState.stepIdx = nextStep;
+    } else {
+      // End of bar
+      const nextBar    = barIdx + 1;
+      const nextBIS    = barInSlot + 1;
+
+      if (nextBIS >= d.bars) {
+        // Advance to next slot
+        seqPos++;
+        if (seqPos >= sequence.length) {
+          if (randomMode) sequence = shuffle(Array.from({length: tempoCount}, (_, i) => i));
+          seqPos = 0;
+        }
+        schedState.slotIdx   = sequence[seqPos];
+        schedState.barInSlot = 0;
+      } else {
+        schedState.barInSlot = nextBIS;
+      }
+
+      schedState.stepIdx = 0;
+      schedState.barIdx  = nextBar;
+    }
+  }
+}
+
+// ============================================================
+// RAF-based UI highlight — fires at the right audio moment
+// ============================================================
+function rafHighlight() {
+  if (!isPlaying) return;
+
+  const now = audioCtx.currentTime;
+  while (highlightQueue.length > 0 && highlightQueue[0].audioTime <= now) {
+    const ev = highlightQueue.shift();
+    applyHighlight(ev.slotIdx, ev.stepIdx, ev.barIdx);
+  }
+
+  rafHandle = requestAnimationFrame(rafHighlight);
+}
+
+function applyHighlight(slotIdx, stepIdx, barIdx) {
+  // ---- Step button highlight (use cache) ----
+  if (lastHlStep >= 0 && lastHlSlot >= 0) {
+    const prev = stepBtnCache[lastHlSlot]?.[lastHlStep];
+    if (prev) prev.classList.remove('active-beat');
+  }
+  const cur = stepBtnCache[slotIdx]?.[stepIdx];
+  if (cur) cur.classList.add('active-beat');
+  lastHlStep = stepIdx;
+  lastHlSlot = slotIdx;
+
+  // ---- Tempo block active state — only update when slot changes ----
+  if (slotIdx !== lastHlSlotForBlock) {
+    const ni = nextSlotForDisplay();
+    for (let i = 0; i < tempoCount; i++) {
+      const tb = document.getElementById('tb-' + i);
+      if (!tb) continue;
+      tb.classList.remove('active', 'active-rand');
+      if (i === slotIdx) tb.classList.add(randomMode ? 'active-rand' : 'active');
+      const nb = document.getElementById('nbadge-' + i);
+      if (nb) nb.style.display = (i === ni && ni !== slotIdx) ? '' : 'none';
+    }
+    lastHlSlotForBlock = slotIdx;
+  }
+
+  // ---- Stats — write only changed values ----
+  const d   = tempoData[slotIdx];
+  const bpm = d.bpm + ' BPM';
+  if (elBpm && elBpm.textContent !== bpm) {
+    elBpm.textContent = bpm;
+    // CSS animation flash — remove and re-add class to restart animation
+    elBpm.classList.remove('flash-anim');
+    // force reflow so browser restarts the animation
+    void elBpm.offsetWidth;
+    elBpm.classList.add('flash-anim');
+  }
+  const slotStr = (slotIdx + 1) + '/' + tempoCount;
+  if (elSlot && elSlot.textContent !== slotStr) elSlot.textContent = slotStr;
+  const tsStr = d.timeSig + '/4';
+  if (elTs && elTs.textContent !== tsStr) elTs.textContent = tsStr;
+  const barStr = String(barIdx + 1);
+  if (elBar && elBar.textContent !== barStr) elBar.textContent = barStr;
+  const stepStr = (stepIdx + 1) + '/' + STEPS;
+  if (elStep && elStep.textContent !== stepStr) elStep.textContent = stepStr;
+}
+
+function nextSlotForDisplay() {
+  // What slot comes after current seqPos?
+  const nextPos = seqPos + 1;
+  if (randomMode && nextPos >= sequence.length) return -1;
+  return sequence[nextPos % sequence.length];
+}
+
+// ============================================================
+// Playback control
+// ============================================================
+function togglePlay() {
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  isPlaying = !isPlaying;
+  const btn  = document.getElementById('play-btn');
+  const icon = document.getElementById('play-icon');
+
+  if (isPlaying) {
+    buildSequence();
+    schedState     = initSchedState();
+    nextAudioTime  = audioCtx.currentTime + 0.05;
+    highlightQueue = [];
+    lastHlStep     = -1;
+    lastHlSlot     = -1;
+
+    schedulerTimer = setInterval(scheduler, SCHEDULE_INT);
+    rafHandle      = requestAnimationFrame(rafHighlight);
+
+    icon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+    btn.classList.add('playing');
+  } else {
+    clearInterval(schedulerTimer);
+    cancelAnimationFrame(rafHandle);
+    highlightQueue = [];
+
+    // Clear highlight
+    if (lastHlStep >= 0 && lastHlSlot >= 0) {
+      const p = document.getElementById(`sb-${lastHlSlot}-${lastHlStep}`);
+      if (p) p.classList.remove('active-beat');
+      lastHlStep = -1; lastHlSlot = -1;
+    }
+    // Reset tempo block styles
+    for (let i = 0; i < tempoCount; i++) {
+      const tb = document.getElementById('tb-' + i);
+      if (tb) { tb.classList.remove('active', 'active-rand'); if (i === 0) tb.classList.add('active'); }
+      const nb = document.getElementById('nbadge-' + i);
+      if (nb) nb.style.display = 'none';
+    }
+    lastHlSlotForBlock = -1;
+    ['s-bpm','s-slot','s-ts','s-bar','s-step'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.textContent = '—';
+    });
+    icon.innerHTML = '<polygon points="5,3 19,12 5,21"/>';
+    btn.classList.remove('playing');
+  }
+}
+
+// ============================================================
+// Sound synthesis
+// ============================================================
+function playCustomBuffer(buf, time, vol) {
+  if (!buf) return;
+  const entry = getPoolEntry();
+  entry.busy  = true;
+  // Reuse the pooled GainNode — just update the gain value
+  entry.gain.gain.setValueAtTime(vol, time);
+  // BufferSourceNode must be created fresh each time (spec requirement)
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf;
+  src.connect(entry.gain);          // -> pooled gain -> masterGain
+  src.onended = () => { entry.busy = false; };
+  src.start(time);
+  // auto-stop after buffer duration + small margin
+  src.stop(time + buf.duration + 0.01);
+}
+
+function playSynth(time, accent) {
+  const vol  = accent ? accentVol : normalVol;
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(masterGain);
+
+  switch (soundType) {
+    case 'click':
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(accent ? 1050 : 720, time);
+      gain.gain.setValueAtTime(accent ? 0.7 * vol : 0.4 * vol, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.045);
+      break;
+    case 'hihat':
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(accent ? 9000 : 6500, time);
+      gain.gain.setValueAtTime(accent ? 0.13 * vol : 0.07 * vol, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.025);
+      break;
+    case 'beep':
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(accent ? 880 : 440, time);
+      gain.gain.setValueAtTime(accent ? 0.45 * vol : 0.25 * vol, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.09);
+      break;
+    case 'wood':
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(accent ? 320 : 190, time);
+      gain.gain.setValueAtTime(accent ? 0.8 * vol : 0.5 * vol, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.065);
+      break;
+    default:
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(720, time);
+      gain.gain.setValueAtTime(0.4 * vol, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.045);
+  }
+  osc.start(time);
+  osc.stop(time + 0.18);
+}
+
+function playSound(time, accent) {
+  if (soundType === 'custom') {
+    const buf = accent ? (customBuffers.accent || customBuffers.normal) : customBuffers.normal;
+    const vol = accent ? accentVol : normalVol;
+    if (buf) { playCustomBuffer(buf, time, vol); return; }
+  }
+  playSynth(time, accent);
+}
+
+// ============================================================
+// Custom sound import
+// ============================================================
+async function loadCustomSound(type, input) {
+  const file = input.files[0];
+  if (!file) return;
+  try {
+    const ab  = await file.arrayBuffer();
+    const buf = await audioCtx.decodeAudioData(ab);
+    customBuffers[type] = buf;
+    document.getElementById(`imp-${type}-name`).textContent = file.name;
+    document.getElementById(`imp-${type}-clear`).style.display = '';
+    document.getElementById('sound-type').value = 'custom';
+    soundType = 'custom';
+  } catch (e) {
+    alert('音声ファイルの読み込みに失敗しました: ' + e.message);
+  }
+}
+
+function clearSound(type) {
+  customBuffers[type] = null;
+  document.getElementById(`imp-${type}-name`).textContent =
+    type === 'accent' ? '未選択（通常音を流用）' : '未選択';
+  document.getElementById(`imp-${type}-clear`).style.display = 'none';
+  document.getElementById(`imp-${type}`).value = '';
+}
+
+// ============================================================
+// UI builders
+// ============================================================
+function buildTempoBlocks() {
+  const cont = document.getElementById('tempo-blocks');
+  cont.innerHTML = '';
+  for (let i = 0; i < tempoCount; i++) {
+    const d  = tempoData[i];
+    const el = document.createElement('div');
+    el.className = 'tblock' + (i === 0 ? ' active' : '');
+    el.id = 'tb-' + i;
+    const barPills = BAR_OPTIONS.map(n =>
+      `<button class="pill${d.bars === n ? ' sel' : ''}" onclick="setBar(${i},${n})">${n}</button>`
+    ).join('');
+    const tsPills = TS_OPTIONS.map(n =>
+      `<button class="pill${d.timeSig === n ? ' sel-ts' : ''}" onclick="setTimeSig(${i},${n})">${n}/4</button>`
+    ).join('');
+    el.innerHTML = `
+      <div class="th">
+        <span class="tname">TEMPO ${i + 1}</span>
+        <span class="badge badge-next" id="nbadge-${i}" style="display:none">NEXT</span>
+      </div>
+      <div class="bpm-row">
+        <span class="bpm-disp" id="bv-${i}" onclick="openNumpad('bpm',${i})">${d.bpm}</span>
+        <span class="bpm-unit">BPM</span>
+      </div>
+      <input type="range" id="br-${i}" min="20" max="240" value="${d.bpm}" step="1"
+        oninput="tempoData[${i}].bpm=+this.value;document.getElementById('bv-${i}').textContent=this.value">
+      <div class="tempo-settings-row">
+        <div class="setting-row"><span class="setting-lbl">小節数：</span><div class="pills" id="bpills-${i}">${barPills}</div></div>
+        <div class="setting-row"><span class="setting-lbl">拍子：</span><div class="pills" id="tspills-${i}">${tsPills}</div></div>
+      </div>`;
+    cont.appendChild(el);
+  }
+  const randLabel = document.getElementById('rand-label');
+  randLabel.classList.toggle('disabled', tempoCount === 1);
+  document.getElementById('random-mode').disabled = tempoCount === 1;
+  if (tempoCount === 1) {
+    randomMode = false;
+    randLabel.classList.remove('on');
+    document.getElementById('random-mode').checked = false;
+  }
+  buildPatternPanels();
+}
+
+function setBar(i, n) {
+  tempoData[i].bars = n;
+  document.querySelectorAll(`#bpills-${i} .pill`).forEach(p =>
+    p.classList.toggle('sel', +p.textContent === n)
+  );
+}
+
+function setTimeSig(i, n) {
+  tempoData[i].timeSig = n;
+  // Preserve existing on/accent pattern, only reset spacing guide
+  // (do NOT wipe user-edited steps — just rebuild the beat-label display)
+  document.querySelectorAll(`#tspills-${i} .pill`).forEach(p => {
+    p.classList.remove('sel-ts');
+    if (+p.textContent.replace('/4', '') === n) p.classList.add('sel-ts');
+  });
+  buildPatternPanels(); // re-render labels only
+}
+
+function buildPatternPanels() {
+  // Tabs
+  const tabs = document.getElementById('pattern-tabs');
+  tabs.innerHTML = '';
+  for (let i = 0; i < tempoCount; i++) {
+    const btn = document.createElement('button');
+    btn.className = 'pill' + (i === activePatternTab ? ' sel' : '');
+    btn.textContent = `TEMPO ${i + 1}`;
+    btn.onclick = () => { activePatternTab = i; buildPatternPanels(); };
+    tabs.appendChild(btn);
+  }
+
+  // Panels
+  const panels = document.getElementById('pattern-panels');
+  panels.innerHTML = '';
+  for (let i = 0; i < tempoCount; i++) {
+    const d    = tempoData[i];
+    const panel = document.createElement('div');
+    panel.style.display = i === activePatternTab ? 'block' : 'none';
+    panel.id = 'panel-' + i;
+    const spb = Math.max(1, STEPS / d.timeSig);
+
+    let stepBtns = '';
+    for (let j = 0; j < STEPS; j++) {
+      const s   = d.steps[j];
+      const bl  = j % spb === 0 ? String(Math.floor(j / spb) + 1) : '·';
+      const cls = s.accent ? 'accent' : s.on ? 'on' : '';
+      stepBtns += `<button class="step-btn${cls ? ' ' + cls : ''}" id="sb-${i}-${j}" onclick="cycleStep(${i},${j})">
+        <span class="step-num">${j + 1}</span><span>${bl}</span></button>`;
     }
 
-    nextTime += (60 / BPM) / 4;
+    let msCells = '';
+    for (let j = 0; j < STEPS; j++) {
+      const v = d.offsets[j];
+      msCells += `<div class="ms-cell" onclick="openNumpad('ms',${i},${j})">
+        <span class="ms-num">${j + 1}</span>
+        <span class="ms-val" id="mv-${i}-${j}">${v > 0 ? '+' : ''}${v}</span></div>`;
+    }
+
+    panel.innerHTML = `
+      <div class="step-wrap">
+        <span class="step-sub">鳴らす位置 — TEMPO ${i + 1} / ${d.timeSig}/4拍子 — クリック: OFF→ON→アクセント</span>
+        <div class="step-grid" style="grid-template-columns:repeat(16,1fr)">${stepBtns}</div>
+      </div>
+      <div class="ms-section">
+        <span class="step-sub">タイミングオフセット（ms）</span>
+        <div class="ms-grid" style="grid-template-columns:repeat(16,1fr)">${msCells}</div>
+      </div>`;
+    panels.appendChild(panel);
+  }
+
+  // Rebuild step button DOM cache for all slots
+  for (let i = 0; i < 3; i++) {
+    stepBtnCache[i] = [];
+    for (let j = 0; j < STEPS; j++) {
+      stepBtnCache[i][j] = document.getElementById(`sb-${i}-${j}`) || null;
+    }
   }
 }
 
-function updateUI(step){
+function cycleStep(si, ji) {
+  const s = tempoData[si].steps[ji];
+  if (!s.on)       { s.on = true;  s.accent = false; }
+  else if (!s.accent) { s.accent = true; }
+  else             { s.on = false; s.accent = false; }
+  const btn = document.getElementById(`sb-${si}-${ji}`);
+  if (btn) btn.className = 'step-btn' + (s.accent ? ' accent' : s.on ? ' on' : '');
+}
 
-  document.querySelectorAll(".step")
-    .forEach(el=>el.classList.remove("active"));
+// ============================================================
+// Numpad
+// ============================================================
+function openNumpad(type, slotIdx, stepIdx) {
+  npTarget    = { type, slotIdx, stepIdx: stepIdx ?? 0 };
+  npAllowNeg  = type === 'ms';
+  npBuf       = type === 'bpm'
+    ? String(tempoData[slotIdx].bpm)
+    : String(tempoData[slotIdx].offsets[stepIdx ?? 0]);
+  document.getElementById('np-title').textContent =
+    type === 'bpm'
+      ? `TEMPO ${slotIdx + 1} — BPM`
+      : `TEMPO ${slotIdx + 1} / ステップ ${(stepIdx ?? 0) + 1} — オフセット (ms)`;
+  document.getElementById('np-disp').textContent = npBuf || '0';
+  document.getElementById('np-neg-btn').style.display      = npAllowNeg ? '' : 'none';
+  document.getElementById('np-cancel-btn').style.gridColumn = npAllowNeg ? '' : 'span 2';
+  document.getElementById('numpad-wrap').classList.add('open');
+}
 
-  const el = document.querySelectorAll(".step")[step];
+function closeNumpad() {
+  document.getElementById('numpad-wrap').classList.remove('open');
+  npTarget = null; npBuf = '';
+}
 
-  if(el){
-    el.classList.add("active");
+function numpadOutside(e) {
+  if (e.target === document.getElementById('numpad-wrap')) closeNumpad();
+}
+
+function nk(k) {
+  if (!npTarget) return;
+  if (k === 'cancel') { closeNumpad(); return; }
+  if (k === 'ok')     { applyNumpad(); closeNumpad(); return; }
+  if (k === 'del')    { npBuf = npBuf.length > 1 ? npBuf.slice(0, -1) : '0'; }
+  else if (k === 'neg') {
+    npBuf = npBuf.startsWith('-') ? npBuf.slice(1) : ('-' + npBuf);
+  } else {
+    if (npBuf === '0' || npBuf === '-0') npBuf = npBuf.replace('0', '');
+    npBuf += k;
+    if (npBuf.replace(/[-]/g, '').length > 4) npBuf = npBuf.slice(0, -1);
+  }
+  document.getElementById('np-disp').textContent = npBuf || '0';
+}
+
+function applyNumpad() {
+  if (!npTarget) return;
+  const v = parseFloat(npBuf) || 0;
+  const { type, slotIdx, stepIdx } = npTarget;
+  if (type === 'bpm') {
+    const bpm = Math.min(240, Math.max(20, Math.round(v)));
+    tempoData[slotIdx].bpm = bpm;
+    document.getElementById('bv-' + slotIdx).textContent = bpm;
+    const r = document.getElementById('br-' + slotIdx);
+    if (r) r.value = bpm;
+  } else {
+    const ms = Math.min(500, Math.max(-500, v));
+    tempoData[slotIdx].offsets[stepIdx] = ms;
+    const mv = document.getElementById(`mv-${slotIdx}-${stepIdx}`);
+    if (mv) mv.textContent = (ms > 0 ? '+' : '') + ms;
   }
 }
 
-async function toggle(){
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('numpad-wrap').classList.contains('open')) return;
+  if (e.key >= '0' && e.key <= '9') { e.preventDefault(); nk(e.key); }
+  else if (e.key === 'Backspace')    { e.preventDefault(); nk('del'); }
+  else if (e.key === 'Enter' || e.key === 'NumpadEnter') { e.preventDefault(); nk('ok'); }
+  else if (e.key === 'Escape')       { e.preventDefault(); closeNumpad(); }
+  else if (e.key === '-')            { e.preventDefault(); nk('neg'); }
+});
 
-  if(audioCtx.state === "suspended"){
-    await audioCtx.resume();
-  }
-
-  playing = !playing;
-
-  if(playing){
-
-    nextTime = audioCtx.currentTime + 0.1;
-
-    timer = setInterval(scheduler, 25);
-
-    document.getElementById("status").textContent = "PLAYING";
-
-    document.getElementById("playBtn").textContent = "STOP";
-
-  }else{
-
-    clearInterval(timer);
-
-    document.getElementById("status").textContent = "STOPPED";
-
-    document.getElementById("playBtn").textContent = "PLAY";
-  }
+// ============================================================
+// Event handlers
+// ============================================================
+function onTempoCountChange() {
+  tempoCount = +document.getElementById('tempo-count').value;
+  if (activePatternTab >= tempoCount) activePatternTab = 0;
+  buildTempoBlocks();
 }
 
-document.getElementById("playBtn")
-  .onclick = toggle;
+function onRandomChange() {
+  if (tempoCount === 1) return;
+  randomMode = document.getElementById('random-mode').checked;
+  document.getElementById('rand-label').classList.toggle('on', randomMode);
+}
 
-if("serviceWorker" in navigator){
-
-  window.addEventListener("load", ()=>{
-
-    navigator.serviceWorker
-      .register("./sw.js")
-      .then(()=>console.log("SW READY"));
-
+// ============================================================
+// PWA: Service Worker
+// ============================================================
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js')
+      .then(r  => console.log('SW registered:', r.scope))
+      .catch(e => console.warn('SW failed:', e));
   });
 }
 
-buildGrid();
+let deferredPrompt = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredPrompt = e;
+  const bar = document.getElementById('install-bar');
+  if (bar) bar.style.display = 'flex';
+});
+function installApp() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  deferredPrompt.userChoice.then(() => {
+    deferredPrompt = null;
+    const bar = document.getElementById('install-bar');
+    if (bar) bar.style.display = 'none';
+  });
+}
+window.addEventListener('appinstalled', () => {
+  const bar = document.getElementById('install-bar');
+  if (bar) bar.style.display = 'none';
+});
 
+// ============================================================
+// Boot
+// ============================================================
+buildTempoBlocks();
+// Cache frequently-accessed stat elements once
+elBpm  = document.getElementById('s-bpm');
+elSlot = document.getElementById('s-slot');
+elTs   = document.getElementById('s-ts');
+elBar  = document.getElementById('s-bar');
+elStep = document.getElementById('s-step');
 </script>
 
+<div id="install-bar">
+  <div class="ib-text">📲 <span>Rhythm App</span> をホーム画面に追加してオフラインで使えます</div>
+  <div class="ib-btns">
+    <button class="ib-btn ib-install" onclick="installApp()">インストール</button>
+    <button class="ib-btn ib-dismiss" onclick="document.getElementById('install-bar').style.display='none'">後で</button>
+  </div>
+</div>
 </body>
 </html>
