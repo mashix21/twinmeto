@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Rhythm App</title>
 <link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -21,21 +21,7 @@
   --on:rgba(200,255,95,0.18);--ac:rgba(95,200,255,0.22);
 }
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-html,body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;
-  /* iOS Safari: prevent callout/selection on tap */
-  -webkit-tap-highlight-color:transparent;
-  -webkit-touch-callout:none;
-}
-/* Prevent scroll during tap on interactive elements (fixes iOS offset bug) */
-button,.pill,.step-btn,.ms-cell,.bpm-disp,.nk,.ib-btn,.import-btn,.import-clear,.toggle{
-  touch-action:manipulation;
-  -webkit-tap-highlight-color:transparent;
-  cursor:pointer;
-}
-/* 委譲コンテナにも touch-action を設定してSafariのスクロール干渉を防ぐ */
-#tempo-blocks,#pattern-tabs,#pattern-panels{
-  touch-action:pan-y;
-}
+html,body{background:var(--bg);color:var(--text);font-family:'Syne',sans-serif}
 body{
   display:flex;flex-direction:column;align-items:center;
   min-height:100vh;min-height:100dvh;padding:2rem 1rem;padding-top:max(2rem,env(safe-area-inset-top));padding-bottom:max(2rem,env(safe-area-inset-bottom));padding-left:max(1rem,env(safe-area-inset-left));padding-right:max(1rem,env(safe-area-inset-right));
@@ -193,7 +179,7 @@ input[type=file]{display:none}
 <!-- Transport -->
 <div class="card">
   <div class="transport">
-    <button id="play-btn">
+    <button id="play-btn" onclick="togglePlay()">
       <svg id="play-icon" viewBox="0 0 24 24" fill="currentColor"><polygon points="5,3 19,12 5,21"/></svg>
     </button>
     <div class="stats">
@@ -299,19 +285,19 @@ input[type=file]{display:none}
 </div>
 
 <!-- Numpad -->
-<div class="numpad-wrap" id="numpad-wrap">
+<div class="numpad-wrap" id="numpad-wrap" onclick="numpadOutside(event)">
   <div class="numpad">
     <div class="numpad-title" id="np-title">BPM 入力</div>
     <div class="numpad-display" id="np-disp">0</div>
     <div class="numpad-grid">
-      <button class="nk" id="nk-7">7</button><button class="nk" id="nk-8">8</button><button class="nk" id="nk-9">9</button>
-      <button class="nk" id="nk-4">4</button><button class="nk" id="nk-5">5</button><button class="nk" id="nk-6">6</button>
-      <button class="nk" id="nk-1">1</button><button class="nk" id="nk-2">2</button><button class="nk" id="nk-3">3</button>
-      <button class="nk" id="nk-del">⌫</button><button class="nk" id="nk-0">0</button><button class="nk ok" id="nk-ok">OK</button>
+      <button class="nk" onclick="nk('7')">7</button><button class="nk" onclick="nk('8')">8</button><button class="nk" onclick="nk('9')">9</button>
+      <button class="nk" onclick="nk('4')">4</button><button class="nk" onclick="nk('5')">5</button><button class="nk" onclick="nk('6')">6</button>
+      <button class="nk" onclick="nk('1')">1</button><button class="nk" onclick="nk('2')">2</button><button class="nk" onclick="nk('3')">3</button>
+      <button class="nk" onclick="nk('del')">⌫</button><button class="nk" onclick="nk('0')">0</button><button class="nk ok" onclick="nk('ok')">OK</button>
     </div>
     <div class="nk-row">
-      <button class="nk neg" id="np-neg-btn" style="display:none">±</button>
-      <button class="nk cancel" id="np-cancel-btn" style="grid-column:span 2">キャンセル</button>
+      <button class="nk neg" id="np-neg-btn" onclick="nk('neg')" style="display:none">±</button>
+      <button class="nk cancel" id="np-cancel-btn" onclick="nk('cancel')" style="grid-column:span 2">キャンセル</button>
     </div>
   </div>
 </div>
@@ -433,8 +419,6 @@ let lastHlSlotForBlock = -1;
 
 // Numpad
 let npTarget = null, npBuf = '', npAllowNeg = false;
-// iOS Safari: scroll position saved before body lock
-let _iosScrollY = 0;
 
 // ============================================================
 // Sequence helpers
@@ -756,10 +740,10 @@ function buildTempoBlocks() {
     el.className = 'tblock' + (i === 0 ? ' active' : '');
     el.id = 'tb-' + i;
     const barPills = BAR_OPTIONS.map(n =>
-      `<button class="pill${d.bars === n ? ' sel' : ''}" data-bar="${n}">${n}</button>`
+      `<button class="pill${d.bars === n ? ' sel' : ''}" onclick="setBar(${i},${n})">${n}</button>`
     ).join('');
     const tsPills = TS_OPTIONS.map(n =>
-      `<button class="pill${d.timeSig === n ? ' sel-ts' : ''}" data-ts="${n}">${n}/4</button>`
+      `<button class="pill${d.timeSig === n ? ' sel-ts' : ''}" onclick="setTimeSig(${i},${n})">${n}/4</button>`
     ).join('');
     el.innerHTML = `
       <div class="th">
@@ -767,7 +751,7 @@ function buildTempoBlocks() {
         <span class="badge badge-next" id="nbadge-${i}" style="display:none">NEXT</span>
       </div>
       <div class="bpm-row">
-        <span class="bpm-disp" id="bv-${i}" data-slot="${i}">${d.bpm}</span>
+        <span class="bpm-disp" id="bv-${i}" onclick="openNumpad('bpm',${i})">${d.bpm}</span>
         <span class="bpm-unit">BPM</span>
       </div>
       <input type="range" id="br-${i}" min="20" max="240" value="${d.bpm}" step="1"
@@ -791,12 +775,9 @@ function buildTempoBlocks() {
 
 function setBar(i, n) {
   tempoData[i].bars = n;
-  // iOS Safari: touchend内の同期DOM更新を遅延
-  setTimeout(() => {
-    document.querySelectorAll(`#bpills-${i} .pill`).forEach(p =>
-      p.classList.toggle('sel', +p.textContent === n)
-    );
-  }, 0);
+  document.querySelectorAll(`#bpills-${i} .pill`).forEach(p =>
+    p.classList.toggle('sel', +p.textContent === n)
+  );
 }
 
 function setTimeSig(i, n) {
@@ -805,6 +786,7 @@ function setTimeSig(i, n) {
   const oldLen  = d.steps.length;
 
   if (newLen !== oldLen) {
+    // Resize steps: keep existing, extend with off, or truncate
     if (newLen > oldLen) {
       for (let k = oldLen; k < newLen; k++) d.steps.push({on:false, accent:false});
       for (let k = oldLen; k < newLen; k++) d.offsets.push(0);
@@ -815,9 +797,11 @@ function setTimeSig(i, n) {
   }
   d.timeSig = n;
 
-  // iOS Safari: touchend内の同期DOM再構築は描画がスキップされるため
-  // setTimeout(0)で1フレーム後に遅延実行する
-  setTimeout(() => buildTempoBlocks(), 0);
+  document.querySelectorAll(`#tspills-${i} .pill`).forEach(p => {
+    p.classList.remove('sel-ts');
+    if (+p.textContent.replace('/4', '') === n) p.classList.add('sel-ts');
+  });
+  buildPatternPanels();
 }
 
 function buildPatternPanels() {
@@ -828,9 +812,7 @@ function buildPatternPanels() {
     const btn = document.createElement('button');
     btn.className = 'pill' + (i === activePatternTab ? ' sel' : '');
     btn.textContent = `TEMPO ${i + 1}`;
-    // iOS fastTap for pattern tab (スマホ対応)
-    const _i = i;
-    fastTap(btn, () => { activePatternTab = _i; buildPatternPanels(); });
+    btn.onclick = () => { activePatternTab = i; buildPatternPanels(); };
     tabs.appendChild(btn);
   }
 
@@ -852,14 +834,14 @@ function buildPatternPanels() {
       // 各拍の頭 (j % SUB === 0) に拍番号、それ以外は ·
       const bl  = j % SUB === 0 ? String(Math.floor(j / SUB) + 1) : '·';
       const cls = s.accent ? 'accent' : s.on ? 'on' : '';
-      stepBtns += `<button class="step-btn${cls ? ' ' + cls : ''}" id="sb-${i}-${j}">
+      stepBtns += `<button class="step-btn${cls ? ' ' + cls : ''}" id="sb-${i}-${j}" onclick="cycleStep(${i},${j})">
         <span class="step-num">${j + 1}</span><span>${bl}</span></button>`;
     }
 
     let msCells = '';
     for (let j = 0; j < totalSteps; j++) {
       const v = d.offsets[j];
-      msCells += `<div class="ms-cell" id="mc-${i}-${j}">
+      msCells += `<div class="ms-cell" onclick="openNumpad('ms',${i},${j})">
         <span class="ms-num">${j + 1}</span>
         <span class="ms-val" id="mv-${i}-${j}">${v > 0 ? '+' : ''}${v}</span></div>`;
     }
@@ -876,17 +858,13 @@ function buildPatternPanels() {
     panels.appendChild(panel);
   }
 
-  // Rebuild step button DOM cache — tempoCountのみ
-  for (let i = 0; i < tempoCount; i++) {
+  // Rebuild step button DOM cache for all slots (dynamic length)
+  for (let i = 0; i < 3; i++) {
     const n = stepsForTs(tempoData[i].timeSig);
     stepBtnCache[i] = [];
     for (let j = 0; j < n; j++) {
       stepBtnCache[i][j] = document.getElementById(`sb-${i}-${j}`) || null;
     }
-  }
-  // tempoCountを超えるスロットのキャッシュをクリア
-  for (let i = tempoCount; i < 3; i++) {
-    stepBtnCache[i] = [];
   }
 }
 
@@ -915,22 +893,12 @@ function openNumpad(type, slotIdx, stepIdx) {
   document.getElementById('np-disp').textContent = npBuf || '0';
   document.getElementById('np-neg-btn').style.display      = npAllowNeg ? '' : 'none';
   document.getElementById('np-cancel-btn').style.gridColumn = npAllowNeg ? '' : 'span 2';
-  // iOS Safari fix: lock scroll to prevent touch coordinate offset in fixed overlay
-  _iosScrollY = window.scrollY;
-  document.body.style.position   = 'fixed';
-  document.body.style.top        = `-${_iosScrollY}px`;
-  document.body.style.width      = '100%';
   document.getElementById('numpad-wrap').classList.add('open');
 }
 
 function closeNumpad() {
   document.getElementById('numpad-wrap').classList.remove('open');
   npTarget = null; npBuf = '';
-  // iOS Safari fix: restore scroll position
-  document.body.style.position = '';
-  document.body.style.top      = '';
-  document.body.style.width    = '';
-  window.scrollTo(0, _iosScrollY);
 }
 
 function numpadOutside(e) {
@@ -980,141 +948,8 @@ document.addEventListener('keydown', e => {
 });
 
 // ============================================================
-// iOS タッチ対応: イベント委譲（Event Delegation）
-// 各コンテナが独自の状態を持つ。グローバル変数共有バグを修正。
+// Event handlers
 // ============================================================
-
-function delegateTouch(container, fn) {
-  // ★ 各コンテナごとに独立した状態変数（グローバル共有廃止）
-  let startX = 0, startY = 0, moved = false;
-
-  container.addEventListener('touchstart', e => {
-    moved = false;
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-  }, { passive: true });
-  container.addEventListener('touchmove', e => {
-    if (Math.abs(e.touches[0].clientX - startX) > 8 ||
-        Math.abs(e.touches[0].clientY - startY) > 8) {
-      moved = true;
-    }
-  }, { passive: true });
-  container.addEventListener('touchend', e => {
-    if (moved) return;
-    // ターゲットがインタラクティブ要素の場合のみpreventDefault
-    const t = e.target;
-    if (t.closest('button') || t.closest('[data-ts]') || t.closest('[data-bar]') ||
-        t.closest('.bpm-disp') || t.closest('.step-btn') || t.closest('.ms-cell') ||
-        t.closest('.pill')) {
-      e.preventDefault();
-    }
-    fn(t, e);
-  });
-  // デスクトップ fallback
-  container.addEventListener('click', e => {
-    if ('ontouchstart' in window) return;
-    fn(e.target, e);
-  });
-}
-
-// 祖先をたどって条件に合う要素を探す（iOS Safari互換・カスタム実装）
-// ※ブラウザ標準の .closest() と名前衝突しないよう findAncestor に改名
-function findAncestor(el, root, selector) {
-  while (el && el !== root) {
-    try {
-      if (el.matches && el.matches(selector)) return el;
-    } catch(err) {}
-    el = el.parentElement;
-  }
-  return null;
-}
-
-function delegateTouch(container, fn) {
-  let startX = 0, startY = 0, moved = false, lastTouch = 0;
-
-  container.addEventListener('touchstart', e => {
-    moved = false;
-    startX = e.touches[0].clientX;
-    startY = e.touches[0].clientY;
-  }, { passive: true });
-  container.addEventListener('touchmove', e => {
-    if (Math.abs(e.touches[0].clientX - startX) > 8 ||
-        Math.abs(e.touches[0].clientY - startY) > 8) {
-      moved = true;
-    }
-  }, { passive: true });
-  container.addEventListener('touchend', e => {
-    if (moved) return;
-    lastTouch = Date.now();
-    e.preventDefault();
-    fn(e.target, e);
-  });
-  // デスクトップ fallback（タッチ直後300ms以内のゴーストclickを除外）
-  container.addEventListener('click', e => {
-    if (Date.now() - lastTouch < 350) return;
-    fn(e.target, e);
-  });
-}
-
-function initDelegation() {
-  // ---- テンポブロック（拍子pill / 小節pill / BPM表示） ----
-  const tempoBlocks = document.getElementById('tempo-blocks');
-  delegateTouch(tempoBlocks, (target) => {
-    function getSlotIdx(el) {
-      while (el && el !== tempoBlocks) {
-        if (el.id && el.id.startsWith('tb-')) return +el.id.slice(3);
-        el = el.parentElement;
-      }
-      return -1;
-    }
-    const tsBtn = findAncestor(target, tempoBlocks, '[data-ts]');
-    if (tsBtn) {
-      const si = getSlotIdx(tsBtn);
-      if (si >= 0) setTimeout(() => setTimeSig(si, +tsBtn.dataset.ts), 0);
-      return;
-    }
-    const barBtn = findAncestor(target, tempoBlocks, '[data-bar]');
-    if (barBtn) {
-      const si = getSlotIdx(barBtn);
-      if (si >= 0) setTimeout(() => setBar(si, +barBtn.dataset.bar), 0);
-      return;
-    }
-    const bpmDisp = findAncestor(target, tempoBlocks, '.bpm-disp');
-    if (bpmDisp) {
-      const si = getSlotIdx(bpmDisp);
-      if (si >= 0) setTimeout(() => openNumpad('bpm', si), 0);
-      return;
-    }
-  });
-
-  // ---- パターンタブ ----
-  const patternTabs = document.getElementById('pattern-tabs');
-  delegateTouch(patternTabs, (target) => {
-    const pill = findAncestor(target, patternTabs, '.pill');
-    if (!pill) return;
-    const idx = Array.from(patternTabs.children).indexOf(pill);
-    if (idx >= 0) { activePatternTab = idx; setTimeout(() => buildPatternPanels(), 0); }
-  });
-
-  // ---- パターンパネル（step-btn / ms-cell） ----
-  const patternPanels = document.getElementById('pattern-panels');
-  delegateTouch(patternPanels, (target) => {
-    const sb = findAncestor(target, patternPanels, '.step-btn');
-    if (sb && sb.id) {
-      const [, si, ji] = sb.id.split('-').map(Number);
-      setTimeout(() => cycleStep(si, ji), 0);
-      return;
-    }
-    const mc = findAncestor(target, patternPanels, '.ms-cell');
-    if (mc && mc.id) {
-      const [, si, ji] = mc.id.split('-').map(Number);
-      setTimeout(() => openNumpad('ms', si, ji), 0);
-      return;
-    }
-  });
-}
-
-
 function onTempoCountChange() {
   tempoCount = +document.getElementById('tempo-count').value;
   if (activePatternTab >= tempoCount) activePatternTab = 0;
@@ -1133,22 +968,7 @@ function onRandomChange() {
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(reg => {
-        console.log('SW registered:', reg.scope);
-        // iOS Safari: 起動のたびに更新チェックを強制する
-        reg.update();
-        // 新しいSWが待機中なら即座に有効化してリロード
-        reg.addEventListener('updatefound', () => {
-          const newWorker = reg.installing;
-          if (!newWorker) return;
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              // 新バージョンが使用可能になったらリロード
-              window.location.reload();
-            }
-          });
-        });
-      })
+      .then(r  => console.log('SW registered:', r.scope))
       .catch(e => console.warn('SW failed:', e));
   });
 }
@@ -1184,74 +1004,6 @@ elSlot = document.getElementById('s-slot');
 elTs   = document.getElementById('s-ts');
 elBar  = document.getElementById('s-bar');
 elStep = document.getElementById('s-step');
-
-// イベント委譲を初期化（DOM再構築後も有効）
-initDelegation();
-
-// ---- numpad buttons（position:fixed — 委譲不可のため個別バインド） ----
-{
-  let _npMoved = false, _npSX = 0, _npSY = 0;
-  function npFastTap(el, fn) {
-    el.addEventListener('touchstart', e => {
-      _npMoved = false; _npSX = e.touches[0].clientX; _npSY = e.touches[0].clientY;
-    }, { passive: true });
-    el.addEventListener('touchmove', e => {
-      if (Math.abs(e.touches[0].clientX - _npSX) > 8 ||
-          Math.abs(e.touches[0].clientY - _npSY) > 8) _npMoved = true;
-    }, { passive: true });
-    el.addEventListener('touchend', e => {
-      if (_npMoved) return;
-      e.preventDefault();
-      fn();
-    });
-    el.addEventListener('click', e => {
-      if ('ontouchstart' in window) return;
-      fn();
-    });
-  }
-  ['7','8','9','4','5','6','1','2','3','del','0','ok'].forEach(k => {
-    const el = document.getElementById('nk-' + k);
-    if (el) npFastTap(el, () => nk(k));
-  });
-  npFastTap(document.getElementById('np-neg-btn'),    () => nk('neg'));
-  npFastTap(document.getElementById('np-cancel-btn'), () => nk('cancel'));
-
-  // numpad overlay 背景タップで閉じる
-  const npWrap = document.getElementById('numpad-wrap');
-  npWrap.addEventListener('touchstart', e => {
-    _npMoved = false; _npSX = e.touches[0].clientX; _npSY = e.touches[0].clientY;
-  }, { passive: true });
-  npWrap.addEventListener('touchend', e => {
-    if (_npMoved) return;
-    if (e.target === npWrap) { e.preventDefault(); closeNumpad(); }
-  });
-  npWrap.addEventListener('click', e => {
-    if ('ontouchstart' in window) return;
-    if (e.target === npWrap) closeNumpad();
-  });
-}
-
-// play button
-{
-  let _pMoved = false, _pSX = 0, _pSY = 0;
-  const pb = document.getElementById('play-btn');
-  pb.addEventListener('touchstart', e => {
-    _pMoved = false; _pSX = e.touches[0].clientX; _pSY = e.touches[0].clientY;
-  }, { passive: true });
-  pb.addEventListener('touchmove', e => {
-    if (Math.abs(e.touches[0].clientX - _pSX) > 8 ||
-        Math.abs(e.touches[0].clientY - _pSY) > 8) _pMoved = true;
-  }, { passive: true });
-  pb.addEventListener('touchend', e => {
-    if (_pMoved) return;
-    e.preventDefault();
-    togglePlay();
-  });
-  pb.addEventListener('click', e => {
-    if ('ontouchstart' in window) return;
-    togglePlay();
-  });
-}
 </script>
 
 <div id="install-bar">
