@@ -32,6 +32,10 @@ button,.pill,.step-btn,.ms-cell,.bpm-disp,.nk,.ib-btn,.import-btn,.import-clear,
   -webkit-tap-highlight-color:transparent;
   cursor:pointer;
 }
+/* 委譲コンテナにも touch-action を設定してSafariのスクロール干渉を防ぐ */
+#tempo-blocks,#pattern-tabs,#pattern-panels{
+  touch-action:pan-y;
+}
 body{
   display:flex;flex-direction:column;align-items:center;
   min-height:100vh;min-height:100dvh;padding:2rem 1rem;padding-top:max(2rem,env(safe-area-inset-top));padding-bottom:max(2rem,env(safe-area-inset-bottom));padding-left:max(1rem,env(safe-area-inset-left));padding-right:max(1rem,env(safe-area-inset-right));
@@ -787,9 +791,12 @@ function buildTempoBlocks() {
 
 function setBar(i, n) {
   tempoData[i].bars = n;
-  document.querySelectorAll(`#bpills-${i} .pill`).forEach(p =>
-    p.classList.toggle('sel', +p.textContent === n)
-  );
+  // iOS Safari: touchend内の同期DOM更新を遅延
+  setTimeout(() => {
+    document.querySelectorAll(`#bpills-${i} .pill`).forEach(p =>
+      p.classList.toggle('sel', +p.textContent === n)
+    );
+  }, 0);
 }
 
 function setTimeSig(i, n) {
@@ -798,7 +805,6 @@ function setTimeSig(i, n) {
   const oldLen  = d.steps.length;
 
   if (newLen !== oldLen) {
-    // Resize steps: keep existing, extend with off, or truncate
     if (newLen > oldLen) {
       for (let k = oldLen; k < newLen; k++) d.steps.push({on:false, accent:false});
       for (let k = oldLen; k < newLen; k++) d.offsets.push(0);
@@ -809,10 +815,9 @@ function setTimeSig(i, n) {
   }
   d.timeSig = n;
 
-  // pillのsel-ts更新 + パターンパネル再構築
-  // スマホではDOMを直接書き換えるとfastTapの再バインドが必要なため
-  // buildTempoBlocksで完全再構築してからbuildPatternPanelsを呼ぶ
-  buildTempoBlocks();
+  // iOS Safari: touchend内の同期DOM再構築は描画がスキップされるため
+  // setTimeout(0)で1フレーム後に遅延実行する
+  setTimeout(() => buildTempoBlocks(), 0);
 }
 
 function buildPatternPanels() {
@@ -976,28 +981,34 @@ document.addEventListener('keydown', e => {
 
 // ============================================================
 // iOS タッチ対応: イベント委譲（Event Delegation）
-// DOM再構築後も有効。個別要素へのバインドは不要。
+// 各コンテナが独自の状態を持つ。グローバル変数共有バグを修正。
 // ============================================================
 
-// タッチ移動検知用グローバル状態
-let _td_startX = 0, _td_startY = 0, _td_moved = false;
-
 function delegateTouch(container, fn) {
+  // ★ 各コンテナごとに独立した状態変数（グローバル共有廃止）
+  let startX = 0, startY = 0, moved = false;
+
   container.addEventListener('touchstart', e => {
-    _td_moved = false;
-    _td_startX = e.touches[0].clientX;
-    _td_startY = e.touches[0].clientY;
+    moved = false;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
   }, { passive: true });
   container.addEventListener('touchmove', e => {
-    if (Math.abs(e.touches[0].clientX - _td_startX) > 8 ||
-        Math.abs(e.touches[0].clientY - _td_startY) > 8) {
-      _td_moved = true;
+    if (Math.abs(e.touches[0].clientX - startX) > 8 ||
+        Math.abs(e.touches[0].clientY - startY) > 8) {
+      moved = true;
     }
   }, { passive: true });
   container.addEventListener('touchend', e => {
-    if (_td_moved) return;
-    e.preventDefault();
-    fn(e.target, e);
+    if (moved) return;
+    // ターゲットがインタラクティブ要素の場合のみpreventDefault
+    const t = e.target;
+    if (t.closest('button') || t.closest('[data-ts]') || t.closest('[data-bar]') ||
+        t.closest('.bpm-disp') || t.closest('.step-btn') || t.closest('.ms-cell') ||
+        t.closest('.pill')) {
+      e.preventDefault();
+    }
+    fn(t, e);
   });
   // デスクトップ fallback
   container.addEventListener('click', e => {
@@ -1006,10 +1017,12 @@ function delegateTouch(container, fn) {
   });
 }
 
-// 祖先をたどって条件に合う要素を探す
+// 祖先をたどって条件に合う要素を探す（iOS Safari互換）
 function closest(el, root, selector) {
   while (el && el !== root) {
-    if (el.matches && el.matches(selector)) return el;
+    try {
+      if (el.matches && el.matches(selector)) return el;
+    } catch(e) {}
     el = el.parentElement;
   }
   return null;
@@ -1019,22 +1032,31 @@ function initDelegation() {
   // ---- テンポブロック（拍子pill / 小節pill / BPM表示） ----
   const tempoBlocks = document.getElementById('tempo-blocks');
   delegateTouch(tempoBlocks, (target) => {
+    // タップされた要素からtb-{n}の親を探す
+    function getSlotIdx(el) {
+      while (el && el !== tempoBlocks) {
+        if (el.id && el.id.startsWith('tb-')) return +el.id.slice(3);
+        el = el.parentElement;
+      }
+      return -1;
+    }
+
     const tsBtn = closest(target, tempoBlocks, '[data-ts]');
     if (tsBtn) {
-      const slotEl = tsBtn.closest('[id^="tb-"]');
-      if (slotEl) setTimeSig(+slotEl.id.replace('tb-', ''), +tsBtn.dataset.ts);
+      const si = getSlotIdx(tsBtn);
+      if (si >= 0) setTimeSig(si, +tsBtn.dataset.ts);
       return;
     }
     const barBtn = closest(target, tempoBlocks, '[data-bar]');
     if (barBtn) {
-      const slotEl = barBtn.closest('[id^="tb-"]');
-      if (slotEl) setBar(+slotEl.id.replace('tb-', ''), +barBtn.dataset.bar);
+      const si = getSlotIdx(barBtn);
+      if (si >= 0) setBar(si, +barBtn.dataset.bar);
       return;
     }
     const bpmDisp = closest(target, tempoBlocks, '.bpm-disp');
     if (bpmDisp) {
-      const slotEl = bpmDisp.closest('[id^="tb-"]');
-      if (slotEl) openNumpad('bpm', +slotEl.id.replace('tb-', ''));
+      const si = getSlotIdx(bpmDisp);
+      if (si >= 0) openNumpad('bpm', si);
       return;
     }
   });
@@ -1045,7 +1067,7 @@ function initDelegation() {
     const pill = closest(target, patternTabs, '.pill');
     if (!pill) return;
     const idx = Array.from(patternTabs.children).indexOf(pill);
-    if (idx >= 0) { activePatternTab = idx; buildPatternPanels(); }
+    if (idx >= 0) { activePatternTab = idx; setTimeout(() => buildPatternPanels(), 0); }
   });
 
   // ---- パターンパネル（step-btn / ms-cell） ----
@@ -1055,14 +1077,14 @@ function initDelegation() {
     const sb = closest(target, patternPanels, '.step-btn');
     if (sb && sb.id) {
       const [, si, ji] = sb.id.split('-').map(Number);
-      cycleStep(si, ji);
+      setTimeout(() => cycleStep(si, ji), 0);
       return;
     }
     // ms-cell
     const mc = closest(target, patternPanels, '.ms-cell');
     if (mc && mc.id) {
       const [, si, ji] = mc.id.split('-').map(Number);
-      openNumpad('ms', si, ji);
+      setTimeout(() => openNumpad('ms', si, ji), 0);
       return;
     }
   });
