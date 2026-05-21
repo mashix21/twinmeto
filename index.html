@@ -1017,22 +1017,49 @@ function delegateTouch(container, fn) {
   });
 }
 
-// 祖先をたどって条件に合う要素を探す（iOS Safari互換）
-function closest(el, root, selector) {
+// 祖先をたどって条件に合う要素を探す（iOS Safari互換・カスタム実装）
+// ※ブラウザ標準の .closest() と名前衝突しないよう findAncestor に改名
+function findAncestor(el, root, selector) {
   while (el && el !== root) {
     try {
       if (el.matches && el.matches(selector)) return el;
-    } catch(e) {}
+    } catch(err) {}
     el = el.parentElement;
   }
   return null;
+}
+
+function delegateTouch(container, fn) {
+  let startX = 0, startY = 0, moved = false, lastTouch = 0;
+
+  container.addEventListener('touchstart', e => {
+    moved = false;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+  }, { passive: true });
+  container.addEventListener('touchmove', e => {
+    if (Math.abs(e.touches[0].clientX - startX) > 8 ||
+        Math.abs(e.touches[0].clientY - startY) > 8) {
+      moved = true;
+    }
+  }, { passive: true });
+  container.addEventListener('touchend', e => {
+    if (moved) return;
+    lastTouch = Date.now();
+    e.preventDefault();
+    fn(e.target, e);
+  });
+  // デスクトップ fallback（タッチ直後300ms以内のゴーストclickを除外）
+  container.addEventListener('click', e => {
+    if (Date.now() - lastTouch < 350) return;
+    fn(e.target, e);
+  });
 }
 
 function initDelegation() {
   // ---- テンポブロック（拍子pill / 小節pill / BPM表示） ----
   const tempoBlocks = document.getElementById('tempo-blocks');
   delegateTouch(tempoBlocks, (target) => {
-    // タップされた要素からtb-{n}の親を探す
     function getSlotIdx(el) {
       while (el && el !== tempoBlocks) {
         if (el.id && el.id.startsWith('tb-')) return +el.id.slice(3);
@@ -1040,23 +1067,22 @@ function initDelegation() {
       }
       return -1;
     }
-
-    const tsBtn = closest(target, tempoBlocks, '[data-ts]');
+    const tsBtn = findAncestor(target, tempoBlocks, '[data-ts]');
     if (tsBtn) {
       const si = getSlotIdx(tsBtn);
-      if (si >= 0) setTimeSig(si, +tsBtn.dataset.ts);
+      if (si >= 0) setTimeout(() => setTimeSig(si, +tsBtn.dataset.ts), 0);
       return;
     }
-    const barBtn = closest(target, tempoBlocks, '[data-bar]');
+    const barBtn = findAncestor(target, tempoBlocks, '[data-bar]');
     if (barBtn) {
       const si = getSlotIdx(barBtn);
-      if (si >= 0) setBar(si, +barBtn.dataset.bar);
+      if (si >= 0) setTimeout(() => setBar(si, +barBtn.dataset.bar), 0);
       return;
     }
-    const bpmDisp = closest(target, tempoBlocks, '.bpm-disp');
+    const bpmDisp = findAncestor(target, tempoBlocks, '.bpm-disp');
     if (bpmDisp) {
       const si = getSlotIdx(bpmDisp);
-      if (si >= 0) openNumpad('bpm', si);
+      if (si >= 0) setTimeout(() => openNumpad('bpm', si), 0);
       return;
     }
   });
@@ -1064,7 +1090,7 @@ function initDelegation() {
   // ---- パターンタブ ----
   const patternTabs = document.getElementById('pattern-tabs');
   delegateTouch(patternTabs, (target) => {
-    const pill = closest(target, patternTabs, '.pill');
+    const pill = findAncestor(target, patternTabs, '.pill');
     if (!pill) return;
     const idx = Array.from(patternTabs.children).indexOf(pill);
     if (idx >= 0) { activePatternTab = idx; setTimeout(() => buildPatternPanels(), 0); }
@@ -1073,15 +1099,13 @@ function initDelegation() {
   // ---- パターンパネル（step-btn / ms-cell） ----
   const patternPanels = document.getElementById('pattern-panels');
   delegateTouch(patternPanels, (target) => {
-    // step-btn
-    const sb = closest(target, patternPanels, '.step-btn');
+    const sb = findAncestor(target, patternPanels, '.step-btn');
     if (sb && sb.id) {
       const [, si, ji] = sb.id.split('-').map(Number);
       setTimeout(() => cycleStep(si, ji), 0);
       return;
     }
-    // ms-cell
-    const mc = closest(target, patternPanels, '.ms-cell');
+    const mc = findAncestor(target, patternPanels, '.ms-cell');
     if (mc && mc.id) {
       const [, si, ji] = mc.id.split('-').map(Number);
       setTimeout(() => openNumpad('ms', si, ji), 0);
