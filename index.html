@@ -773,16 +773,6 @@ function buildTempoBlocks() {
         <div class="setting-row"><span class="setting-lbl">拍子：</span><div class="pills" id="tspills-${i}">${tsPills}</div></div>
       </div>`;
     cont.appendChild(el);
-
-    // iOS fastTap for bar pills, ts pills, bpm-disp in this block
-    el.querySelectorAll('[data-bar]').forEach(btn => {
-      fastTap(btn, () => setBar(i, +btn.dataset.bar));
-    });
-    el.querySelectorAll('[data-ts]').forEach(btn => {
-      fastTap(btn, () => setTimeSig(i, +btn.dataset.ts));
-    });
-    const bpmDisp = el.querySelector('.bpm-disp');
-    if (bpmDisp) fastTap(bpmDisp, () => openNumpad('bpm', i));
   }
   const randLabel = document.getElementById('rand-label');
   randLabel.classList.toggle('disabled', tempoCount === 1);
@@ -881,21 +871,12 @@ function buildPatternPanels() {
     panels.appendChild(panel);
   }
 
-  // Rebuild step button DOM cache — tempoCountのみ（固定3ではなく）
+  // Rebuild step button DOM cache — tempoCountのみ
   for (let i = 0; i < tempoCount; i++) {
     const n = stepsForTs(tempoData[i].timeSig);
     stepBtnCache[i] = [];
     for (let j = 0; j < n; j++) {
-      const btn = document.getElementById(`sb-${i}-${j}`);
-      stepBtnCache[i][j] = btn || null;
-      // iOS fastTap: クロージャを確実にキャプチャするため即時関数で囲む
-      if (btn) {
-        ((_i, _j) => { fastTap(btn, () => cycleStep(_i, _j)); })(i, j);
-      }
-      const mc = document.getElementById(`mc-${i}-${j}`);
-      if (mc) {
-        ((_i, _j) => { fastTap(mc, () => openNumpad('ms', _i, _j)); })(i, j);
-      }
+      stepBtnCache[i][j] = document.getElementById(`sb-${i}-${j}`) || null;
     }
   }
   // tempoCountを超えるスロットのキャッシュをクリア
@@ -994,31 +975,96 @@ document.addEventListener('keydown', e => {
 });
 
 // ============================================================
-// iOS fastTap: removes 300ms click delay and touch offset bugs
-// Falls back to click on non-touch devices.
+// iOS タッチ対応: イベント委譲（Event Delegation）
+// DOM再構築後も有効。個別要素へのバインドは不要。
 // ============================================================
-function fastTap(el, fn) {
-  let _startX, _startY, _moved;
-  el.addEventListener('touchstart', e => {
-    _moved = false;
-    _startX = e.touches[0].clientX;
-    _startY = e.touches[0].clientY;
+
+// タッチ移動検知用グローバル状態
+let _td_startX = 0, _td_startY = 0, _td_moved = false;
+
+function delegateTouch(container, fn) {
+  container.addEventListener('touchstart', e => {
+    _td_moved = false;
+    _td_startX = e.touches[0].clientX;
+    _td_startY = e.touches[0].clientY;
   }, { passive: true });
-  el.addEventListener('touchmove', e => {
-    if (Math.abs(e.touches[0].clientX - _startX) > 8 ||
-        Math.abs(e.touches[0].clientY - _startY) > 8) {
-      _moved = true;
+  container.addEventListener('touchmove', e => {
+    if (Math.abs(e.touches[0].clientX - _td_startX) > 8 ||
+        Math.abs(e.touches[0].clientY - _td_startY) > 8) {
+      _td_moved = true;
     }
   }, { passive: true });
-  el.addEventListener('touchend', e => {
-    if (_moved) return;
-    e.preventDefault(); // prevent ghost click
-    fn(e);
+  container.addEventListener('touchend', e => {
+    if (_td_moved) return;
+    e.preventDefault();
+    fn(e.target, e);
   });
-  // fallback for non-touch (desktop)
-  el.addEventListener('click', e => {
-    if ('ontouchstart' in window) return; // already handled by touchend
-    fn(e);
+  // デスクトップ fallback
+  container.addEventListener('click', e => {
+    if ('ontouchstart' in window) return;
+    fn(e.target, e);
+  });
+}
+
+// 祖先をたどって条件に合う要素を探す
+function closest(el, root, selector) {
+  while (el && el !== root) {
+    if (el.matches && el.matches(selector)) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
+function initDelegation() {
+  // ---- テンポブロック（拍子pill / 小節pill / BPM表示） ----
+  const tempoBlocks = document.getElementById('tempo-blocks');
+  delegateTouch(tempoBlocks, (target) => {
+    const tsBtn = closest(target, tempoBlocks, '[data-ts]');
+    if (tsBtn) {
+      const slotEl = tsBtn.closest('[id^="tb-"]');
+      if (slotEl) setTimeSig(+slotEl.id.replace('tb-', ''), +tsBtn.dataset.ts);
+      return;
+    }
+    const barBtn = closest(target, tempoBlocks, '[data-bar]');
+    if (barBtn) {
+      const slotEl = barBtn.closest('[id^="tb-"]');
+      if (slotEl) setBar(+slotEl.id.replace('tb-', ''), +barBtn.dataset.bar);
+      return;
+    }
+    const bpmDisp = closest(target, tempoBlocks, '.bpm-disp');
+    if (bpmDisp) {
+      const slotEl = bpmDisp.closest('[id^="tb-"]');
+      if (slotEl) openNumpad('bpm', +slotEl.id.replace('tb-', ''));
+      return;
+    }
+  });
+
+  // ---- パターンタブ ----
+  const patternTabs = document.getElementById('pattern-tabs');
+  delegateTouch(patternTabs, (target) => {
+    const pill = closest(target, patternTabs, '.pill');
+    if (!pill) return;
+    const idx = Array.from(patternTabs.children).indexOf(pill);
+    if (idx >= 0) { activePatternTab = idx; buildPatternPanels(); }
+  });
+
+  // ---- パターンパネル（step-btn / ms-cell） ----
+  const patternPanels = document.getElementById('pattern-panels');
+  delegateTouch(patternPanels, (target) => {
+    // step-btn
+    const sb = closest(target, patternPanels, '.step-btn');
+    if (sb && sb.id) {
+      const [, si, ji] = sb.id.split('-').map(Number);
+      cycleStep(si, ji);
+      return;
+    }
+    // ms-cell
+    const mc = closest(target, patternPanels, '.ms-cell');
+    if (mc && mc.id) {
+      const [, si, ji] = mc.id.split('-').map(Number);
+      openNumpad('ms', si, ji);
+      return;
+    }
   });
 }
 
@@ -1078,20 +1124,73 @@ elTs   = document.getElementById('s-ts');
 elBar  = document.getElementById('s-bar');
 elStep = document.getElementById('s-step');
 
-// iOS fastTap for numpad buttons (position:fixed overlay)
-['7','8','9','4','5','6','1','2','3','del','0','ok'].forEach(k => {
-  const el = document.getElementById('nk-' + k);
-  if (el) fastTap(el, () => nk(k));
-});
-fastTap(document.getElementById('np-neg-btn'),    () => nk('neg'));
-fastTap(document.getElementById('np-cancel-btn'), () => nk('cancel'));
+// イベント委譲を初期化（DOM再構築後も有効）
+initDelegation();
 
-// iOS fastTap for numpad overlay background (close on outside tap)
-const npWrap = document.getElementById('numpad-wrap');
-fastTap(npWrap, e => { if (e.target === npWrap) closeNumpad(); });
+// ---- numpad buttons（position:fixed — 委譲不可のため個別バインド） ----
+{
+  let _npMoved = false, _npSX = 0, _npSY = 0;
+  function npFastTap(el, fn) {
+    el.addEventListener('touchstart', e => {
+      _npMoved = false; _npSX = e.touches[0].clientX; _npSY = e.touches[0].clientY;
+    }, { passive: true });
+    el.addEventListener('touchmove', e => {
+      if (Math.abs(e.touches[0].clientX - _npSX) > 8 ||
+          Math.abs(e.touches[0].clientY - _npSY) > 8) _npMoved = true;
+    }, { passive: true });
+    el.addEventListener('touchend', e => {
+      if (_npMoved) return;
+      e.preventDefault();
+      fn();
+    });
+    el.addEventListener('click', e => {
+      if ('ontouchstart' in window) return;
+      fn();
+    });
+  }
+  ['7','8','9','4','5','6','1','2','3','del','0','ok'].forEach(k => {
+    const el = document.getElementById('nk-' + k);
+    if (el) npFastTap(el, () => nk(k));
+  });
+  npFastTap(document.getElementById('np-neg-btn'),    () => nk('neg'));
+  npFastTap(document.getElementById('np-cancel-btn'), () => nk('cancel'));
 
-// iOS fastTap for play button
-fastTap(document.getElementById('play-btn'), () => togglePlay());
+  // numpad overlay 背景タップで閉じる
+  const npWrap = document.getElementById('numpad-wrap');
+  npWrap.addEventListener('touchstart', e => {
+    _npMoved = false; _npSX = e.touches[0].clientX; _npSY = e.touches[0].clientY;
+  }, { passive: true });
+  npWrap.addEventListener('touchend', e => {
+    if (_npMoved) return;
+    if (e.target === npWrap) { e.preventDefault(); closeNumpad(); }
+  });
+  npWrap.addEventListener('click', e => {
+    if ('ontouchstart' in window) return;
+    if (e.target === npWrap) closeNumpad();
+  });
+}
+
+// play button
+{
+  let _pMoved = false, _pSX = 0, _pSY = 0;
+  const pb = document.getElementById('play-btn');
+  pb.addEventListener('touchstart', e => {
+    _pMoved = false; _pSX = e.touches[0].clientX; _pSY = e.touches[0].clientY;
+  }, { passive: true });
+  pb.addEventListener('touchmove', e => {
+    if (Math.abs(e.touches[0].clientX - _pSX) > 8 ||
+        Math.abs(e.touches[0].clientY - _pSY) > 8) _pMoved = true;
+  }, { passive: true });
+  pb.addEventListener('touchend', e => {
+    if (_pMoved) return;
+    e.preventDefault();
+    togglePlay();
+  });
+  pb.addEventListener('click', e => {
+    if ('ontouchstart' in window) return;
+    togglePlay();
+  });
+}
 </script>
 
 <div id="install-bar">
