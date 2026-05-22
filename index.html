@@ -214,14 +214,14 @@ input[type=file]{display:none}
       <div class="import-row">
         <span class="import-lbl">通常音（ON）：</span>
         <button class="import-btn" onclick="document.getElementById('imp-normal').click()">ファイル選択</button>
-        <input type="file" id="imp-normal" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/aiff,audio/x-aiff,audio/ogg,audio/mp4,audio/aac,audio/x-m4a,.mp3,.wav,.aif,.aiff,.ogg,.m4a,.aac" onchange="loadCustomSound('normal',this)">
+        <input type="file" id="imp-normal" onchange="loadCustomSound('normal',this)">
         <span class="import-file" id="imp-normal-name">未選択</span>
         <button class="import-clear" onclick="clearSound('normal')" id="imp-normal-clear" style="display:none">✕</button>
       </div>
       <div class="import-row">
         <span class="import-lbl">アクセント音：</span>
         <button class="import-btn" onclick="document.getElementById('imp-accent').click()">ファイル選択</button>
-        <input type="file" id="imp-accent" accept="audio/mpeg,audio/mp3,audio/wav,audio/x-wav,audio/aiff,audio/x-aiff,audio/ogg,audio/mp4,audio/aac,audio/x-m4a,.mp3,.wav,.aif,.aiff,.ogg,.m4a,.aac" onchange="loadCustomSound('accent',this)">
+        <input type="file" id="imp-accent" onchange="loadCustomSound('accent',this)">
         <span class="import-file" id="imp-accent-name">未選択（通常音を流用）</span>
         <button class="import-clear" onclick="clearSound('accent')" id="imp-accent-clear" style="display:none">✕</button>
       </div>
@@ -322,8 +322,11 @@ const CUSTOM_POOL_SIZE = 8;
 let customPool = [];
 let poolCursor = 0;
 
-function ensureAudioContext() {
-  if (audioCtx) return Promise.resolve();
+async function ensureAudioContext() {
+  if (audioCtx) {
+    if (audioCtx.state === 'suspended') await audioCtx.resume();
+    return;
+  }
   // ユーザー操作ハンドラ内で呼ばれるので suspended にならない
   audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
   masterGain = audioCtx.createGain();
@@ -337,7 +340,21 @@ function ensureAudioContext() {
     customPool.push({ gain: g, busy: false });
   }
   poolCursor = 0;
-  return audioCtx.state === 'suspended' ? audioCtx.resume() : Promise.resolve();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+  // ---- iOS Safari スピーカー出力修正 ----
+  // Web Audioのデフォルト AVAudioSession カテゴリは soloAmbient
+  // （着信スイッチOFF時・スピーカー未出力）。
+  // 無音の <audio> 要素を再生することで playback カテゴリに昇格し、
+  // サイレントスイッチに関係なくスピーカーから音が出るようになる。
+  try {
+    // 0.1秒の無音MP3 (base64) を <audio> で再生してセッションを確立
+    const silentMp3 = 'data:audio/mpeg;base64,SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjU4LjMyLjEwNAAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAACAAADhgCenp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6enp6e////////////////////////////////////////////////////////////////AAAAAA==';
+    const silentAudio = new Audio(silentMp3);
+    silentAudio.volume = 0.001;
+    silentAudio.setAttribute('playsinline', '');
+    await silentAudio.play().catch(() => {});
+  } catch(_) {}
 }
 
 function getPoolEntry() {
@@ -738,13 +755,13 @@ function playSound(time, accent) {
 async function loadCustomSound(type, input) {
   const file = input.files[0];
   if (!file) return;
-  // ---- ファイル形式チェック ----
-  const supported = ['audio/mpeg','audio/mp3','audio/wav','audio/x-wav',
-    'audio/aiff','audio/x-aiff','audio/ogg','audio/mp4','audio/aac','audio/x-m4a'];
+  // ---- ファイル形式チェック（緩め: 拡張子 or MIMEで判定） ----
   const ext = file.name.split('.').pop().toLowerCase();
-  const extOk = ['mp3','wav','aif','aiff','ogg','m4a','aac'].includes(ext);
-  if (!extOk && !supported.includes(file.type)) {
-    alert('対応フォーマット: MP3, WAV, AIFF, OGG, M4A, AAC');
+  const extOk  = ['mp3','wav','aif','aiff','ogg','m4a','aac','flac','opus','caf'].includes(ext);
+  const mimeOk = file.type.startsWith('audio/') || file.type === '';
+  // type='' はiOSでMIMEが取れないときに発生するが拡張子OKなら通す
+  if (!extOk && !mimeOk) {
+    alert('対応フォーマット: MP3 / WAV / AIFF / OGG / M4A / AAC');
     return;
   }
   // ---- ロード中表示 ----
