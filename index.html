@@ -232,7 +232,7 @@ input[type=file]{display:none}
       <div class="vol-row">
         <span class="vol-lbl">マスター音量：</span>
         <input type="range" class="vol-slider" id="vol-master" min="0" max="1" step="0.01" value="0.8"
-          oninput="masterGain.gain.value=+this.value;document.getElementById('vol-master-val').textContent=Math.round(this.value*100)+'%'">
+          oninput="if(masterGain)masterGain.gain.value=+this.value;document.getElementById('vol-master-val').textContent=Math.round(this.value*100)+'%'">
         <span class="vol-val" id="vol-master-val">80%</span>
       </div>
       <div class="vol-row">
@@ -304,12 +304,12 @@ input[type=file]{display:none}
 
 <script>
 // ============================================================
-// Audio context + master gain
+// Audio context + master gain  (lazy init — iOS Safari 対応)
 // ============================================================
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-const masterGain = audioCtx.createGain();
-masterGain.gain.value = 0.8;
-masterGain.connect(audioCtx.destination);
+// iOS Safari は ユーザー操作なしに作られた AudioContext を suspended にする。
+// ページロード時には作らず、最初の play ボタンタップ時に初めて作成する。
+let audioCtx  = null;
+let masterGain = null;
 
 let normalVol = 1.0;
 let accentVol = 1.4;
@@ -317,22 +317,30 @@ let accentVol = 1.4;
 // Custom sounds
 let customBuffers = { normal: null, accent: null };
 
-// ---- Custom buffer pool ----
-// AudioBufferSourceNode は使い捨てだが GainNode は再利用できる。
-// pool: 固定サイズのオブジェクト配列で new GainNode の回数を最小化する。
+// ---- Custom buffer pool (lazy) ----
 const CUSTOM_POOL_SIZE = 8;
-const customPool = [];
-function initCustomPool() {
+let customPool = [];
+let poolCursor = 0;
+
+function ensureAudioContext() {
+  if (audioCtx) return Promise.resolve();
+  // ユーザー操作ハンドラ内で呼ばれるので suspended にならない
+  audioCtx   = new (window.AudioContext || window.webkitAudioContext)();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = +document.getElementById('vol-master').value;
+  masterGain.connect(audioCtx.destination);
+  // pool 初期化
+  customPool = [];
   for (let i = 0; i < CUSTOM_POOL_SIZE; i++) {
     const g = audioCtx.createGain();
     g.connect(masterGain);
     customPool.push({ gain: g, busy: false });
   }
+  poolCursor = 0;
+  return audioCtx.state === 'suspended' ? audioCtx.resume() : Promise.resolve();
 }
-initCustomPool();
-let poolCursor = 0;
+
 function getPoolEntry() {
-  // round-robin: find the next non-busy slot (oldest completed ones are fine)
   for (let k = 0; k < CUSTOM_POOL_SIZE; k++) {
     const idx = (poolCursor + k) % CUSTOM_POOL_SIZE;
     if (!customPool[idx].busy) {
@@ -340,9 +348,8 @@ function getPoolEntry() {
       return customPool[idx];
     }
   }
-  // All busy (very high BPM edge case): reuse oldest
   const entry = customPool[poolCursor];
-  poolCursor = (poolCursor + 1) % CUSTOM_POOL_SIZE;
+  poolCursor  = (poolCursor + 1) % CUSTOM_POOL_SIZE;
   return entry;
 }
 
@@ -607,8 +614,8 @@ function updatePatternTabs(activeIdx) {
 // ============================================================
 // Playback control
 // ============================================================
-function togglePlay() {
-  if (audioCtx.state === 'suspended') audioCtx.resume();
+async function togglePlay() {
+  await ensureAudioContext();
   isPlaying = !isPlaying;
   const btn  = document.getElementById('play-btn');
   const icon = document.getElementById('play-icon');
@@ -674,6 +681,7 @@ function playCustomBuffer(buf, time, vol) {
 }
 
 function playSynth(time, accent) {
+  if (!audioCtx) return;
   const vol  = accent ? accentVol : normalVol;
   const osc  = audioCtx.createOscillator();
   const gain = audioCtx.createGain();
@@ -731,6 +739,7 @@ async function loadCustomSound(type, input) {
   const file = input.files[0];
   if (!file) return;
   try {
+    await ensureAudioContext();
     const ab  = await file.arrayBuffer();
     const buf = await audioCtx.decodeAudioData(ab);
     customBuffers[type] = buf;
