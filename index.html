@@ -539,7 +539,7 @@ function applyHighlight(slotIdx, stepIdx, barIdx) {
   lastHlStep = stepIdx;
   lastHlSlot = slotIdx;
 
-  // ---- Tempo block active state — only update when slot changes ----
+  // ---- Tempo block active state + pattern tab — only update when slot changes ----
   if (slotIdx !== lastHlSlotForBlock) {
     const ni = nextSlotForDisplay();
     for (let i = 0; i < tempoCount; i++) {
@@ -549,6 +549,14 @@ function applyHighlight(slotIdx, stepIdx, barIdx) {
       if (i === slotIdx) tb.classList.add(randomMode ? 'active-rand' : 'active');
       const nb = document.getElementById('nbadge-' + i);
       if (nb) nb.style.display = (i === ni && ni !== slotIdx) ? '' : 'none';
+    }
+    // ---- パターンタブをアクティブスロットに自動切り替え ----
+    activePatternTab = slotIdx;
+    updatePatternTabs(slotIdx);
+    // パネル表示も切り替え（DOM再構築なし、display切替のみ）
+    for (let i = 0; i < tempoCount; i++) {
+      const panel = document.getElementById('panel-' + i);
+      if (panel) panel.style.display = i === slotIdx ? 'block' : 'none';
     }
     lastHlSlotForBlock = slotIdx;
   }
@@ -580,6 +588,20 @@ function nextSlotForDisplay() {
   const nextPos = seqPos + 1;
   if (randomMode && nextPos >= sequence.length) return -1;
   return sequence[nextPos % sequence.length];
+}
+
+// ============================================================
+// updatePatternTabs: タブのsel状態だけを軽量に切り替える（パネル再構築なし）
+// ============================================================
+function updatePatternTabs(activeIdx) {
+  const tabs = document.getElementById('pattern-tabs');
+  if (!tabs) return;
+  tabs.querySelectorAll('button').forEach((btn, i) => {
+    btn.classList.toggle('sel', i === activeIdx);
+    // AUTO再生中はアクティブタブに「▶」プレフィックス
+    const base = `TEMPO ${i + 1}`;
+    btn.textContent = (isPlaying && i === activeIdx) ? '▶ ' + base : base;
+  });
 }
 
 // ============================================================
@@ -623,6 +645,7 @@ function togglePlay() {
       if (nb) nb.style.display = 'none';
     }
     lastHlSlotForBlock = -1;
+    updatePatternTabs(activePatternTab); // ▶ プレフィックスを消す
     ['s-bpm','s-slot','s-ts','s-bar','s-step'].forEach(id => {
       const el = document.getElementById(id); if (el) el.textContent = '—';
     });
